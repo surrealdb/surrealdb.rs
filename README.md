@@ -2,7 +2,7 @@
 
 The official SurrealDB library for Rust.
 
-[![](https://img.shields.io/badge/status-beta-ff00bb.svg?style=flat-square)](https://github.com/surrealdb/surrealdb) [![](https://img.shields.io/badge/docs-view-44cc11.svg?style=flat-square)](https://surrealdb.com/docs/integration/libraries/rust) [![](https://img.shields.io/badge/license-Apache_License_2.0-00bfff.svg?style=flat-square)](https://github.com/surrealdb/surrealdb)
+[![](https://img.shields.io/badge/status-beta-ff00bb.svg?style=flat-square)](https://github.com/surrealdb/surrealdb.rs) [![](https://img.shields.io/badge/docs-view-44cc11.svg?style=flat-square)](https://surrealdb.com/docs/integration/libraries/rust) [![](https://img.shields.io/badge/license-Apache_License_2.0-00bfff.svg?style=flat-square)](https://github.com/surrealdb/surrealdb.rs)
 
 <h2><img height="20" src="https://github.com/surrealdb/surrealdb/blob/main/img/whatissurreal.svg?raw=true">&nbsp;&nbsp;What is SurrealDB?</h2>
 
@@ -30,20 +30,22 @@ View the [features](https://surrealdb.com/features), the latest [releases](https
 To add this crate as a Rust dependency, simply run
 
 ```bash
-cargo add surrealdb-rs
+cargo add surrealdb-rs --git https://github.com/surrealdb/surrealdb.rs
 ```
+
+**IMPORTANT**: This client supports SurrealDB `v1.0.0-beta.8+20221030.c12a1cc` or later. So please make sure you have that or a newer version of the server before proceeding. For now, that means a recent nightly version.
 
 <h2><img height="20" src="https://github.com/surrealdb/surrealdb/blob/main/img/features.svg?raw=true">&nbsp;&nbsp;Quick look</h2>
 
-This library enables simple and advanced querying of a remote database from server-side and client-side (via Wasm) code. By default, all connections to SurrealDB are made over WebSockets, and automatically reconnect when the connection is terminated. Connections are automatically closed when they get dropped.
+This library enables simple and advanced querying of a remote database from server-side or client-side (via Wasm) code. By default, all connections to SurrealDB are made over WebSockets, and automatically reconnect when the connection is terminated. Connections are automatically closed when they get dropped.
 
 ```rust
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::borrow::Cow;
-use surrealdb_rs::{Result, Surreal};
 use surrealdb_rs::param::Root;
 use surrealdb_rs::protocol::Ws;
+use surrealdb_rs::{Result, Surreal};
 
 #[derive(Serialize, Deserialize)]
 struct Name {
@@ -65,16 +67,19 @@ async fn main() -> Result<()> {
     let client = Surreal::connect::<Ws>("localhost:8000").await?;
 
     // Signin as a namespace, database, or root user
-    client.signin(Root {
-        username: "root",
-        password: "root",
-    }).await?;
+    client
+        .signin(Root {
+            username: "root",
+            password: "root",
+        })
+        .await?;
 
     // Select a specific namespace and database
     client.use_ns("test").use_db("test").await?;
 
     // Create a new person with a random ID
-    let tobie: Person = client.create("person")
+    let tobie: Person = client
+        .create("person")
         .content(Person {
             id: None,
             title: "Founder & CEO".into(),
@@ -86,8 +91,11 @@ async fn main() -> Result<()> {
         })
         .await?;
 
+    assert!(tobie.id.is_some());
+
     // Create a new person with a specific ID
-    let mut jaime: Person = client.create(("person", "jaime"))
+    let mut jaime: Person = client
+        .create(("person", "jaime"))
         .content(Person {
             id: None,
             title: "Founder & COO".into(),
@@ -99,22 +107,39 @@ async fn main() -> Result<()> {
         })
         .await?;
 
+    assert_eq!(jaime.id.unwrap(), "person:jaime");
+
     // Update a person record with a specific ID
-    jaime = client.update(("person", "jaime"))
-        .merge(json!({"marketing": true}))
+    jaime = client
+        .update(("person", "jaime"))
+        .merge(json!({ "marketing": true }))
         .await?;
+
+    assert!(jaime.marketing);
 
     // Select all people records
     let people: Vec<Person> = client.select("person").await?;
 
+    assert!(!people.is_empty());
+
     // Perform a custom advanced query
     let groups = client
-        .query("SELECT marketing, count() FROM type::table($table) GROUP BY marketing")
+        .query("
+            SELECT marketing,
+                   count()
+            FROM type::table($table)
+            GROUP BY marketing
+        ")
         .bind("table", "person")
         .await?;
 
+    dbg!(groups);
+
     // Delete all people upto but not including Jaime
     client.delete("person").range(.."jaime").await?;
+
+    // Delete all people
+    client.delete("person").await?;
 
     Ok(())
 }
