@@ -116,6 +116,7 @@ use flume::Sender;
 use futures::future::BoxFuture;
 use method::Method;
 use once_cell::sync::OnceCell;
+use semver::BuildMetadata;
 use semver::VersionReq;
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
@@ -131,7 +132,7 @@ use surrealdb::sql::Value;
 /// Result type returned by the client
 pub type Result<T> = std::result::Result<T, Error>;
 
-const SUPPORTED_VERSIONS: &str = ">=1.0.0-beta.8+20221030.c12a1cc, <2.0.0";
+const SUPPORTED_VERSIONS: (&str, &str) = (">=1.0.0-beta.8, <2.0.0", "20221030.c12a1cc");
 
 /// Connection trait implemented by supported protocols
 #[async_trait]
@@ -324,12 +325,18 @@ where
     fn check_server_version(&self) {
         let conn = self.clone();
         tokio::spawn(async move {
+            let (versions, build_meta) = SUPPORTED_VERSIONS;
             // invalid version requirements should be caught during development
-            let req = VersionReq::parse(SUPPORTED_VERSIONS).expect("valid version");
+            let req = VersionReq::parse(versions).expect("valid supported versions");
+            let build_meta =
+                BuildMetadata::new(build_meta).expect("valid supported build metadata");
             match conn.version().await {
                 Ok(version) => {
+                    let server_build = &version.build;
                     if !req.matches(&version) {
-                        tracing::warn!("server version `{version}` does not match the range supported by the client `{SUPPORTED_VERSIONS}`");
+                        tracing::warn!("server version `{version}` does not match the range supported by the client `{versions}`");
+                    } else if server_build < &build_meta {
+                        tracing::warn!("server build `{server_build}` is older than the minimum supported build `{build_meta}`");
                     }
                 }
                 Err(error) => {
