@@ -26,7 +26,6 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-async-trait = "0.1.58"
 dmp = "0.1.1"
 flume = "0.10.14"
 futures = { version = "0.3.25", default-features = false, features = ["alloc", "executor"] }

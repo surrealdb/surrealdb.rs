@@ -3,9 +3,10 @@ use crate::method::Commit;
 use crate::Connection;
 use crate::Result;
 use crate::Surreal;
-use futures::future::BoxFuture;
+use std::future::Future;
 use std::future::IntoFuture;
 use std::ops::Deref;
+use std::pin::Pin;
 use surrealdb::sql::statements::BeginStatement;
 
 /// A beginning of a transaction
@@ -19,7 +20,7 @@ where
     C: Connection,
 {
     type Output = Result<Transaction<C>>;
-    type IntoFuture = BoxFuture<'static, Result<Transaction<C>>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {

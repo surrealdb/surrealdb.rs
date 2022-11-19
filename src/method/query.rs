@@ -3,13 +3,15 @@ use crate::param;
 use crate::param::from_json;
 use crate::param::Param;
 use crate::Connection;
+use crate::Response;
 use crate::Result;
 use crate::Router;
-use futures::future::BoxFuture;
 use serde::Serialize;
 use serde_json::json;
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::future::IntoFuture;
+use std::pin::Pin;
 use surrealdb::sql;
 use surrealdb::sql::Statement;
 use surrealdb::sql::Statements;
@@ -27,8 +29,8 @@ impl<'r, Client> IntoFuture for Query<'r, Client>
 where
     Client: Connection,
 {
-    type Output = Result<Vec<Result<Vec<Value>>>>;
-    type IntoFuture = BoxFuture<'r, Result<Vec<Result<Vec<Value>>>>>;
+    type Output = Result<Response>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
@@ -59,7 +61,7 @@ where
     /// Binds a parameter to a query
     pub fn bind<D>(mut self, key: impl Into<String>, value: D) -> Self
     where
-        D: Serialize + Send,
+        D: Serialize,
     {
         self.bindings.insert(key.into(), from_json(json!(value)));
         self

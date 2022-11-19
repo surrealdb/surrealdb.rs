@@ -8,11 +8,11 @@ use crate::param::ServerAddrs;
 use crate::param::Tls;
 use crate::Connection;
 use crate::Method;
+use crate::Response as QueryResponse;
 use crate::Result;
 use crate::Route;
 use crate::Router;
 use crate::Surreal;
-use async_trait::async_trait;
 use flume::Receiver;
 use futures::StreamExt;
 use indexmap::IndexMap;
@@ -22,14 +22,14 @@ use reqwest::header::HeaderValue;
 use reqwest::header::ACCEPT;
 use reqwest::ClientBuilder;
 use serde::de::DeserializeOwned;
+use std::future::Future;
 use std::marker::PhantomData;
+use std::pin::Pin;
 #[cfg(feature = "ws")]
 use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
-use surrealdb::sql::Value;
 use url::Url;
 
-#[async_trait]
 impl Connection for Client {
     type Request = (Method, Param);
     type Response = Result<DbResponse>;
@@ -38,82 +38,96 @@ impl Connection for Client {
         Self { method }
     }
 
-    async fn connect(address: ServerAddrs, capacity: usize) -> Result<Surreal<Self>> {
-        let mut headers = HeaderMap::new();
-        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+    fn connect(
+        address: ServerAddrs,
+        capacity: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<Surreal<Self>>> + Send + Sync + 'static>> {
+        Box::pin(async move {
+            let mut headers = HeaderMap::new();
+            headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
 
-        #[allow(unused_mut)]
-        let mut builder = ClientBuilder::new().default_headers(headers);
+            #[allow(unused_mut)]
+            let mut builder = ClientBuilder::new().default_headers(headers);
 
-        #[cfg(any(feature = "native-tls", feature = "rustls"))]
-        if let Some(tls) = address.tls_config {
-            builder = match tls {
-                #[cfg(feature = "native-tls")]
-                Tls::Native(config) => builder.use_preconfigured_tls(config),
-                #[cfg(feature = "rustls")]
-                Tls::Rust(config) => builder.use_preconfigured_tls(config),
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
+            if let Some(tls) = address.tls_config {
+                builder = match tls {
+                    #[cfg(feature = "native-tls")]
+                    Tls::Native(config) => builder.use_preconfigured_tls(config),
+                    #[cfg(feature = "rustls")]
+                    Tls::Rust(config) => builder.use_preconfigured_tls(config),
+                };
+            }
+
+            let client = builder.build()?;
+
+            let base_url = address.endpoint;
+
+            super::health(client.get(base_url.join(Method::Health.as_str())?)).await?;
+
+            let (route_tx, route_rx) = match capacity {
+                0 => flume::unbounded(),
+                capacity => flume::bounded(capacity),
             };
-        }
 
-        let client = builder.build()?;
+            router(base_url, client, route_rx);
 
-        let base_url = address.endpoint;
-
-        super::health(client.get(base_url.join(Method::Health.as_str())?)).await?;
-
-        let (route_tx, route_rx) = match capacity {
-            0 => flume::unbounded(),
-            capacity => flume::bounded(capacity),
-        };
-
-        router(base_url, client, route_rx);
-
-        Ok(Surreal {
-            router: OnceCell::with_value(Arc::new(Router {
-                conn: PhantomData,
-                sender: route_tx,
-                #[cfg(feature = "ws")]
-                last_id: AtomicI64::new(0),
-            })),
+            Ok(Surreal {
+                router: OnceCell::with_value(Arc::new(Router {
+                    conn: PhantomData,
+                    sender: route_tx,
+                    #[cfg(feature = "ws")]
+                    last_id: AtomicI64::new(0),
+                })),
+            })
         })
     }
 
-    async fn send(
-        &mut self,
-        router: &Router<Self>,
+    fn send<'r>(
+        &'r mut self,
+        router: &'r Router<Self>,
         param: Param,
-    ) -> Result<Receiver<Self::Response>> {
-        let (sender, receiver) = flume::bounded(1);
-        let route = Route {
-            request: (self.method, param),
-            response: sender,
-        };
-        router.sender.send_async(Some(route)).await?;
-        Ok(receiver)
+    ) -> Pin<Box<dyn Future<Output = Result<Receiver<Self::Response>>> + Send + Sync + 'r>> {
+        Box::pin(async move {
+            let (sender, receiver) = flume::bounded(1);
+            let route = Route {
+                request: (self.method, param),
+                response: sender,
+            };
+            router.sender.send_async(Some(route)).await?;
+            Ok(receiver)
+        })
     }
 
-    async fn recv<R>(&mut self, rx: Receiver<Self::Response>) -> Result<R>
+    fn recv<R>(
+        &mut self,
+        rx: Receiver<Self::Response>,
+    ) -> Pin<Box<dyn Future<Output = Result<R>> + Send + Sync + '_>>
     where
         R: DeserializeOwned,
     {
-        let response = rx.into_recv_async().await?;
-        tracing::trace!("Response {response:?}");
-        match response? {
-            DbResponse::Other(value) => from_value(&value),
-            DbResponse::Query(..) => unreachable!(),
-        }
+        Box::pin(async move {
+            let response = rx.into_recv_async().await?;
+            tracing::trace!("Response {response:?}");
+            match response? {
+                DbResponse::Other(value) => from_value(&value),
+                DbResponse::Query(..) => unreachable!(),
+            }
+        })
     }
 
-    async fn recv_query(
+    fn recv_query(
         &mut self,
         rx: Receiver<Self::Response>,
-    ) -> Result<Vec<Result<Vec<Value>>>> {
-        let response = rx.into_recv_async().await?;
-        tracing::trace!("Response {response:?}");
-        match response? {
-            DbResponse::Query(results) => Ok(results),
-            DbResponse::Other(..) => unreachable!(),
-        }
+    ) -> Pin<Box<dyn Future<Output = Result<QueryResponse>> + Send + Sync + '_>> {
+        Box::pin(async move {
+            let response = rx.into_recv_async().await?;
+            tracing::trace!("Response {response:?}");
+            match response? {
+                DbResponse::Query(results) => Ok(results),
+                DbResponse::Other(..) => unreachable!(),
+            }
+        })
     }
 }
 

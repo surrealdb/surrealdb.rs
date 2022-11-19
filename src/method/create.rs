@@ -5,11 +5,12 @@ use crate::param::Param;
 use crate::Connection;
 use crate::Result;
 use crate::Router;
-use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::future::Future;
 use std::future::IntoFuture;
 use std::marker::PhantomData;
+use std::pin::Pin;
 
 /// A record create future
 #[derive(Debug)]
@@ -36,10 +37,10 @@ where
 impl<'r, Client, R> IntoFuture for Create<'r, Client, Option<R>>
 where
     Client: Connection,
-    R: DeserializeOwned + Send + 'r,
+    R: DeserializeOwned + Send + Sync + 'r,
 {
     type Output = Result<R>;
-    type IntoFuture = BoxFuture<'r, Result<R>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(self.execute())
@@ -49,10 +50,10 @@ where
 impl<'r, Client, R> IntoFuture for Create<'r, Client, Vec<R>>
 where
     Client: Connection,
-    R: DeserializeOwned + Send + 'r,
+    R: DeserializeOwned + Send + Sync + 'r,
 {
     type Output = Result<R>;
-    type IntoFuture = BoxFuture<'r, Result<R>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(self.execute())

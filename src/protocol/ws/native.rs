@@ -13,11 +13,11 @@ use crate::protocol::ws::PING_METHOD;
 use crate::Connection;
 use crate::ErrorKind;
 use crate::Method;
+use crate::Response as QueryResponse;
 use crate::Result;
 use crate::Route;
 use crate::Router;
 use crate::Surreal;
-use async_trait::async_trait;
 use flume::Receiver;
 use futures::stream::SplitSink;
 use futures::SinkExt;
@@ -30,8 +30,10 @@ use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::future::Future;
 use std::marker::PhantomData;
 use std::mem;
+use std::pin::Pin;
 use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 use std::time::Instant;
@@ -87,7 +89,6 @@ async fn connect(
     Ok(socket)
 }
 
-#[async_trait]
 impl Connection for Client {
     type Request = (i64, Method, Param);
     type Response = Result<DbResponse>;
@@ -96,76 +97,90 @@ impl Connection for Client {
         Self { id: 0, method }
     }
 
-    async fn connect(address: ServerAddrs, capacity: usize) -> Result<Surreal<Self>> {
-        let url = address.endpoint.join(PATH)?;
-        #[cfg(any(feature = "native-tls", feature = "rustls"))]
-        let maybe_connector = address.tls_config.map(Connector::from);
-        #[cfg(not(any(feature = "native-tls", feature = "rustls")))]
-        let maybe_connector = None;
+    fn connect(
+        address: ServerAddrs,
+        capacity: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<Surreal<Self>>> + Send + Sync + 'static>> {
+        Box::pin(async move {
+            let url = address.endpoint.join(PATH)?;
+            #[cfg(any(feature = "native-tls", feature = "rustls"))]
+            let maybe_connector = address.tls_config.map(Connector::from);
+            #[cfg(not(any(feature = "native-tls", feature = "rustls")))]
+            let maybe_connector = None;
 
-        let config = WebSocketConfig {
-            max_send_queue: match capacity {
-                0 => None,
-                capacity => Some(capacity),
-            },
-            max_message_size: Some(MAX_MESSAGE_SIZE),
-            max_frame_size: Some(MAX_FRAME_SIZE),
-            accept_unmasked_frames: false,
-        };
+            let config = WebSocketConfig {
+                max_send_queue: match capacity {
+                    0 => None,
+                    capacity => Some(capacity),
+                },
+                max_message_size: Some(MAX_MESSAGE_SIZE),
+                max_frame_size: Some(MAX_FRAME_SIZE),
+                accept_unmasked_frames: false,
+            };
 
-        let socket = connect(&url, Some(config), maybe_connector.clone()).await?;
+            let socket = connect(&url, Some(config), maybe_connector.clone()).await?;
 
-        let (route_tx, route_rx) = match capacity {
-            0 => flume::unbounded(),
-            capacity => flume::bounded(capacity),
-        };
+            let (route_tx, route_rx) = match capacity {
+                0 => flume::unbounded(),
+                capacity => flume::bounded(capacity),
+            };
 
-        router(url, maybe_connector, capacity, config, socket, route_rx);
+            router(url, maybe_connector, capacity, config, socket, route_rx);
 
-        Ok(Surreal {
-            router: OnceCell::with_value(Arc::new(Router {
-                conn: PhantomData,
-                sender: route_tx,
-                last_id: AtomicI64::new(0),
-            })),
+            Ok(Surreal {
+                router: OnceCell::with_value(Arc::new(Router {
+                    conn: PhantomData,
+                    sender: route_tx,
+                    last_id: AtomicI64::new(0),
+                })),
+            })
         })
     }
 
-    async fn send(
-        &mut self,
-        router: &Router<Self>,
+    fn send<'r>(
+        &'r mut self,
+        router: &'r Router<Self>,
         param: Param,
-    ) -> Result<Receiver<Self::Response>> {
-        self.id = router.next_id();
-        let (sender, receiver) = flume::bounded(1);
-        let route = Route {
-            request: (self.id, self.method, param),
-            response: sender,
-        };
-        router.sender.send_async(Some(route)).await?;
-        Ok(receiver)
+    ) -> Pin<Box<dyn Future<Output = Result<Receiver<Self::Response>>> + Send + Sync + 'r>> {
+        Box::pin(async move {
+            self.id = router.next_id();
+            let (sender, receiver) = flume::bounded(1);
+            let route = Route {
+                request: (self.id, self.method, param),
+                response: sender,
+            };
+            router.sender.send_async(Some(route)).await?;
+            Ok(receiver)
+        })
     }
 
-    async fn recv<R>(&mut self, rx: Receiver<Self::Response>) -> Result<R>
+    fn recv<R>(
+        &mut self,
+        rx: Receiver<Self::Response>,
+    ) -> Pin<Box<dyn Future<Output = Result<R>> + Send + Sync + '_>>
     where
         R: DeserializeOwned,
     {
-        let response = rx.into_recv_async().await?;
-        match response? {
-            DbResponse::Other(value) => from_value(&value),
-            DbResponse::Query(..) => unreachable!(),
-        }
+        Box::pin(async move {
+            let response = rx.into_recv_async().await?;
+            match response? {
+                DbResponse::Other(value) => from_value(&value),
+                DbResponse::Query(..) => unreachable!(),
+            }
+        })
     }
 
-    async fn recv_query(
+    fn recv_query(
         &mut self,
         rx: Receiver<Self::Response>,
-    ) -> Result<Vec<Result<Vec<Value>>>> {
-        let response = rx.into_recv_async().await?;
-        match response? {
-            DbResponse::Query(results) => Ok(results),
-            DbResponse::Other(..) => unreachable!(),
-        }
+    ) -> Pin<Box<dyn Future<Output = Result<QueryResponse>> + Send + Sync + '_>> {
+        Box::pin(async move {
+            let response = rx.into_recv_async().await?;
+            match response? {
+                DbResponse::Query(results) => Ok(results),
+                DbResponse::Other(..) => unreachable!(),
+            }
+        })
     }
 }
 

@@ -1,8 +1,9 @@
 use crate::Connection;
 use crate::Result;
 use crate::Surreal;
-use futures::future::BoxFuture;
+use std::future::Future;
 use std::future::IntoFuture;
+use std::pin::Pin;
 use surrealdb::sql::statements::CommitStatement;
 
 /// A transaction commit future
@@ -16,7 +17,7 @@ where
     C: Connection,
 {
     type Output = Result<Surreal<C>>;
-    type IntoFuture = BoxFuture<'static, Result<Surreal<C>>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {

@@ -189,3 +189,21 @@ async fn api() {
     // version
     let _: Version = CLIENT.version().await.unwrap();
 }
+
+fn send_and_sync(_: impl Send + Sync) {}
+
+#[test]
+fn futures_are_send_and_sync() {
+    send_and_sync(async {
+        let client = Surreal::connect::<Test>(()).await.unwrap();
+        client.use_ns("test-ns").use_db("test-db").await.unwrap();
+        client
+            .signin(Root {
+                username: "root",
+                password: "root",
+            })
+            .await
+            .unwrap();
+        let _: Vec<User> = client.select(USER).await.unwrap();
+    });
+}

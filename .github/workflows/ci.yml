@@ -64,14 +64,21 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
+          target: wasm32-unknown-unknown
           override: true
           components: rustfmt, clippy
 
-      - name: Run cargo check
+      - name: Run native cargo check
         uses: actions-rs/cargo@v1
         with:
           command: check
           args: --all-features
+
+      - name: Run Wasm cargo check
+        uses: actions-rs/cargo@v1
+        with:
+          command: check
+          args: --features http --target wasm32-unknown-unknown
 
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
