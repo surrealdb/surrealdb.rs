@@ -11,11 +11,11 @@ use crate::protocol::ws::PING_METHOD;
 use crate::Connection;
 use crate::ErrorKind;
 use crate::Method;
+use crate::Response as QueryResponse;
 use crate::Result;
 use crate::Route;
 use crate::Router;
 use crate::Surreal;
-use async_trait::async_trait;
 use flume::Receiver;
 use flume::Sender;
 use futures::SinkExt;
@@ -30,7 +30,9 @@ use serde::de::DeserializeOwned;
 use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::future::Future;
 use std::marker::PhantomData;
+use std::pin::Pin;
 use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 use std::time::Instant;
@@ -51,7 +53,6 @@ pub(crate) enum Either<S, R> {
     Ping,
 }
 
-#[async_trait]
 impl Connection for Client {
     type Request = (i64, Method, Param);
     type Response = Result<DbResponse>;
@@ -60,66 +61,80 @@ impl Connection for Client {
         Self { id: 0, method }
     }
 
-    async fn connect(mut address: ServerAddrs, capacity: usize) -> Result<Surreal<Self>> {
-        address.endpoint = address.endpoint.join(PATH)?;
+    fn connect(
+        mut address: ServerAddrs,
+        capacity: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<Surreal<Self>>> + Send + Sync + 'static>> {
+        Box::pin(async move {
+            address.endpoint = address.endpoint.join(PATH)?;
 
-        let (route_tx, route_rx) = match capacity {
-            0 => flume::unbounded(),
-            capacity => flume::bounded(capacity),
-        };
+            let (route_tx, route_rx) = match capacity {
+                0 => flume::unbounded(),
+                capacity => flume::bounded(capacity),
+            };
 
-        let (conn_tx, conn_rx) = flume::bounded(1);
+            let (conn_tx, conn_rx) = flume::bounded(1);
 
-        router(address, capacity, conn_tx, route_rx);
+            router(address, capacity, conn_tx, route_rx);
 
-        if let Err(error) = conn_rx.into_recv_async().await? {
-            return Err(error);
-        }
+            if let Err(error) = conn_rx.into_recv_async().await? {
+                return Err(error);
+            }
 
-        Ok(Surreal {
-            router: OnceCell::with_value(Arc::new(Router {
-                conn: PhantomData,
-                sender: route_tx,
-                last_id: AtomicI64::new(0),
-            })),
+            Ok(Surreal {
+                router: OnceCell::with_value(Arc::new(Router {
+                    conn: PhantomData,
+                    sender: route_tx,
+                    last_id: AtomicI64::new(0),
+                })),
+            })
         })
     }
 
-    async fn send(
-        &mut self,
-        router: &Router<Self>,
+    fn send<'r>(
+        &'r mut self,
+        router: &'r Router<Self>,
         param: Param,
-    ) -> Result<Receiver<Self::Response>> {
-        self.id = router.next_id();
-        let (sender, receiver) = flume::bounded(1);
-        let route = Route {
-            request: (self.id, self.method, param),
-            response: sender,
-        };
-        router.sender.send_async(Some(route)).await?;
-        Ok(receiver)
+    ) -> Pin<Box<dyn Future<Output = Result<Receiver<Self::Response>>> + Send + Sync + 'r>> {
+        Box::pin(async move {
+            self.id = router.next_id();
+            let (sender, receiver) = flume::bounded(1);
+            let route = Route {
+                request: (self.id, self.method, param),
+                response: sender,
+            };
+            router.sender.send_async(Some(route)).await?;
+            Ok(receiver)
+        })
     }
 
-    async fn recv<R>(&mut self, rx: Receiver<Self::Response>) -> Result<R>
+    fn recv<R>(
+        &mut self,
+        rx: Receiver<Self::Response>,
+    ) -> Pin<Box<dyn Future<Output = Result<R>> + Send + Sync + '_>>
     where
         R: DeserializeOwned,
     {
-        let response = rx.into_recv_async().await?;
-        match response? {
-            DbResponse::Other(value) => from_value(&value),
-            DbResponse::Query(..) => unreachable!(),
-        }
+        Box::pin(async move {
+            let response = rx.into_recv_async().await?;
+            match response? {
+                DbResponse::Other(value) => from_value(&value),
+                DbResponse::Query(..) => unreachable!(),
+            }
+        })
     }
 
-    async fn recv_query(
+    fn recv_query(
         &mut self,
         rx: Receiver<Self::Response>,
-    ) -> Result<Vec<Result<Vec<Value>>>> {
-        let response = rx.into_recv_async().await?;
-        match response? {
-            DbResponse::Query(results) => Ok(results),
-            DbResponse::Other(..) => unreachable!(),
-        }
+    ) -> Pin<Box<dyn Future<Output = Result<QueryResponse>> + Send + Sync + '_>> {
+        Box::pin(async move {
+            let response = rx.into_recv_async().await?;
+            match response? {
+                DbResponse::Query(results) => Ok(results),
+                DbResponse::Other(..) => unreachable!(),
+            }
+        })
     }
 }
 

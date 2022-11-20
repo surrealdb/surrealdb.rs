@@ -110,18 +110,18 @@ pub use err::ErrorKind;
 
 use crate::param::ServerAddrs;
 use crate::param::ToServerAddrs;
-use async_trait::async_trait;
 use flume::Receiver;
 use flume::Sender;
-use futures::future::BoxFuture;
 use method::Method;
 use once_cell::sync::OnceCell;
 use semver::BuildMetadata;
 use semver::VersionReq;
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
+use std::future::Future;
 use std::future::IntoFuture;
 use std::marker::PhantomData;
+use std::pin::Pin;
 #[cfg(feature = "ws")]
 use std::sync::atomic::AtomicI64;
 #[cfg(feature = "ws")]
@@ -132,57 +132,74 @@ use surrealdb::sql::Value;
 /// Result type returned by the client
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Response type returned by the `query` method
+pub type Response = Vec<Result<Vec<Value>>>;
+
 const SUPPORTED_VERSIONS: (&str, &str) = (">=1.0.0-beta.8, <2.0.0", "20221030.c12a1cc");
 
 /// Connection trait implemented by supported protocols
-#[async_trait]
 pub trait Connection: Sized + Send + Sync + 'static {
     /// The payload the caller sends to the router
-    type Request: Send + Debug;
+    type Request: Send + Sync + Debug;
     /// The payload the router sends back to the caller
-    type Response: Send + Debug;
+    type Response: Send + Sync + Debug;
 
     /// Constructs a new client without connecting to the server
     fn new(method: Method) -> Self;
 
     /// Connect to the server
-    async fn connect(address: ServerAddrs, capacity: usize) -> Result<Surreal<Self>>;
+    fn connect(
+        address: ServerAddrs,
+        capacity: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<Surreal<Self>>> + Send + Sync + 'static>>;
 
     /// Send a query to the server
-    async fn send(
-        &mut self,
-        router: &Router<Self>,
+    #[allow(clippy::type_complexity)]
+    fn send<'r>(
+        &'r mut self,
+        router: &'r Router<Self>,
         param: param::Param,
-    ) -> Result<Receiver<Self::Response>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Receiver<Self::Response>>> + Send + Sync + 'r>>;
 
     /// Receive responses for all methods except `query`
-    async fn recv<R>(&mut self, receiver: Receiver<Self::Response>) -> Result<R>
+    fn recv<R>(
+        &mut self,
+        receiver: Receiver<Self::Response>,
+    ) -> Pin<Box<dyn Future<Output = Result<R>> + Send + Sync + '_>>
     where
         R: DeserializeOwned;
 
     /// Receive the response of the `query` method
-    async fn recv_query(
+    fn recv_query(
         &mut self,
         receiver: Receiver<Self::Response>,
-    ) -> Result<Vec<Result<Vec<Value>>>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Response>> + Send + Sync + '_>>;
 
     /// Execute all methods except `query`
-    async fn execute<R>(&mut self, router: &Router<Self>, param: param::Param) -> Result<R>
+    fn execute<'r, R>(
+        &'r mut self,
+        router: &'r Router<Self>,
+        param: param::Param,
+    ) -> Pin<Box<dyn Future<Output = Result<R>> + Send + Sync + 'r>>
     where
         R: DeserializeOwned,
     {
-        let rx = self.send(router, param).await?;
-        self.recv(rx).await
+        Box::pin(async move {
+            let rx = self.send(router, param).await?;
+            self.recv(rx).await
+        })
     }
 
     /// Execute the `query` method
-    async fn execute_query(
-        &mut self,
-        router: &Router<Self>,
+    fn execute_query<'r>(
+        &'r mut self,
+        router: &'r Router<Self>,
         param: param::Param,
-    ) -> Result<Vec<Result<Vec<Value>>>> {
-        let rx = self.send(router, param).await?;
-        self.recv_query(rx).await
+    ) -> Pin<Box<dyn Future<Output = Result<Response>> + Send + Sync + 'r>> {
+        Box::pin(async move {
+            let rx = self.send(router, param).await?;
+            self.recv_query(rx).await
+        })
     }
 }
 
@@ -238,7 +255,7 @@ where
     Client: Connection,
 {
     type Output = Result<Surreal<Client>>;
-    type IntoFuture = BoxFuture<'r, Result<Surreal<Client>>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
@@ -254,7 +271,7 @@ where
     Client: Connection,
 {
     type Output = Result<()>;
-    type IntoFuture = BoxFuture<'r, Result<()>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {

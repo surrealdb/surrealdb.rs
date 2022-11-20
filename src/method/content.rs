@@ -6,12 +6,13 @@ use crate::param::Range;
 use crate::Connection;
 use crate::Result;
 use crate::Router;
-use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::json;
+use std::future::Future;
 use std::future::IntoFuture;
 use std::marker::PhantomData;
+use std::pin::Pin;
 use surrealdb::sql::Id;
 
 /// A content future
@@ -27,26 +28,38 @@ pub struct Content<'r, C: Connection, D, R> {
     pub(super) response_type: PhantomData<R>,
 }
 
+impl<'r, C, D, R> Content<'r, C, D, R>
+where
+    C: Connection,
+    D: Serialize,
+{
+    fn split(self) -> Result<(&'r Router<C>, Method, Param)> {
+        let resource = self.resource?;
+        let param = match self.range {
+            Some(range) => resource.with_range(range)?,
+            None => resource.into(),
+        };
+        let content = json!(self.content);
+        let param = Param::new(vec![param, from_json(content)]);
+        Ok((self.router?, self.method, param))
+    }
+}
+
 impl<'r, Client, D, R> IntoFuture for Content<'r, Client, D, R>
 where
     Client: Connection,
-    D: Serialize + Send + 'r,
-    R: DeserializeOwned + Send,
+    D: Serialize,
+    R: DeserializeOwned + Send + Sync,
 {
     type Output = Result<R>;
-    type IntoFuture = BoxFuture<'r, Result<R>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
 
     fn into_future(self) -> Self::IntoFuture {
+        let result = self.split();
         Box::pin(async move {
-            let resource = self.resource?;
-            let param = match self.range {
-                Some(range) => resource.with_range(range)?,
-                None => resource.into(),
-            };
-            let content = json!(self.content);
-            let mut conn = Client::new(self.method);
-            conn.execute(self.router?, Param::new(vec![param, from_json(content)]))
-                .await
+            let (router, method, param) = result?;
+            let mut conn = Client::new(method);
+            conn.execute(router, param).await
         })
     }
 }

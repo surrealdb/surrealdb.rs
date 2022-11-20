@@ -9,11 +9,12 @@ use crate::param::Range;
 use crate::Connection;
 use crate::Result;
 use crate::Router;
-use futures::future::BoxFuture;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::future::Future;
 use std::future::IntoFuture;
 use std::marker::PhantomData;
+use std::pin::Pin;
 use surrealdb::sql::Id;
 
 /// An update future
@@ -46,10 +47,10 @@ where
 impl<'r, Client, R> IntoFuture for Update<'r, Client, Option<R>>
 where
     Client: Connection,
-    R: DeserializeOwned + Send + 'r,
+    R: DeserializeOwned + Send + Sync + 'r,
 {
     type Output = Result<R>;
-    type IntoFuture = BoxFuture<'r, Result<R>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(self.execute())
@@ -59,10 +60,10 @@ where
 impl<'r, Client, R> IntoFuture for Update<'r, Client, Vec<R>>
 where
     Client: Connection,
-    R: DeserializeOwned + Send + 'r,
+    R: DeserializeOwned + Send + Sync + 'r,
 {
     type Output = Result<Vec<R>>;
-    type IntoFuture = BoxFuture<'r, Result<Vec<R>>>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(self.execute())
@@ -85,7 +86,7 @@ macro_rules! update_methods {
         impl<'r, C, R> Update<'r, C, $this>
         where
             C: Connection,
-            R: DeserializeOwned + Send,
+            R: DeserializeOwned + Send + Sync,
         {
             /// Replaces the current document / record data with the specified data
             pub fn content<D>(self, data: D) -> Content<'r, C, D, $res>
