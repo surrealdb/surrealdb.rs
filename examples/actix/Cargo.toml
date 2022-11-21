@@ -1,0 +1,13 @@
+[package]
+name = "actix-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+actix-web = { version = "4.2.1", features = ["macros"] }
+serde = { version = "1.0.147", features = ["derive"] }
+surrealdb-rs = { path = "../.." }
+thiserror = "1.0.37"
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"
