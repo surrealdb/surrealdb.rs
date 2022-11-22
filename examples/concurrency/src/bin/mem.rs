@@ -1,10 +1,10 @@
-use surrealdb_rs::net::WsClient;
-use surrealdb_rs::protocol::Ws;
+use surrealdb_rs::embedded::Db;
+use surrealdb_rs::storage::Mem;
 use surrealdb_rs::StaticClient;
 use surrealdb_rs::Surreal;
 use tokio::sync::mpsc;
 
-static CLIENT: Surreal<WsClient> = Surreal::new();
+static DB: Surreal<Db> = Surreal::new();
 
 const NUM: usize = 100_000;
 
@@ -12,16 +12,24 @@ const NUM: usize = 100_000;
 async fn main() -> surrealdb_rs::Result<()> {
 	tracing_subscriber::fmt::init();
 
-	CLIENT.connect::<Ws>("localhost:8000").with_capacity(NUM).await?;
+	DB.connect::<Mem>(()).with_capacity(NUM).await?;
 
-	CLIENT.use_ns("namespace").use_db("database").await?;
+	DB.use_ns("namespace").use_db("database").await?;
 
 	let (tx, mut rx) = mpsc::channel::<()>(1);
 
 	for idx in 0..NUM {
 		let sender = tx.clone();
 		tokio::spawn(async move {
-			let result = CLIENT.query("SELECT * FROM $idx").bind("idx", idx).await.unwrap();
+			#[rustfmt::skip]
+            let result = DB
+                .query("
+                    SELECT *
+                    FROM $idx
+                ")
+                .bind("idx", idx)
+                .await
+                .unwrap();
 
 			let db_idx: Option<usize> = result.get(0, 0).unwrap();
 			if let Some(db_idx) = db_idx {

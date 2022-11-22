@@ -215,7 +215,12 @@ fn router(
 						response,
 					})) => {
 						let (id, method, param) = request;
-						let params = param.query;
+						let params = match param.query {
+							Some((query, bindings)) => {
+								vec![query.to_string().into(), bindings.into()]
+							}
+							None => param.other,
+						};
 						match method {
 							Method::Set => {
 								if let [Value::Strand(Strand(key)), value] = &params[..2] {

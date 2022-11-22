@@ -1,13 +1,13 @@
-use surrealdb_rs::protocol::Ws;
+use surrealdb_rs::storage::Mem;
 use surrealdb_rs::Surreal;
 
 #[tokio::main]
 async fn main() -> surrealdb_rs::Result<()> {
 	tracing_subscriber::fmt::init();
 
-	let client = Surreal::connect::<Ws>("localhost:8000").await?;
+	let db = Surreal::connect::<Mem>(()).await?;
 
-	let version = client.version().await?;
+	let version = db.version().await?;
 
 	tracing::info!("{version:?}");
 

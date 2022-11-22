@@ -31,6 +31,7 @@ impl ToServerAddrs<Test> for () {
 	fn to_server_addrs(self) -> Result<ServerAddrs> {
 		Ok(ServerAddrs {
 			endpoint: Url::parse("test://localhost:8000")?,
+			strict: false,
 			#[cfg(any(feature = "native-tls", feature = "rustls"))]
 			tls_config: None,
 		})

@@ -1,0 +1,12 @@
+[package]
+name = "query-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+serde = { version = "1.0.148", features = ["derive"] }
+surrealdb-rs = { path = "../..", features = ["mem"] }
+tokio = { version = "1.22.0", features = ["macros"] }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"

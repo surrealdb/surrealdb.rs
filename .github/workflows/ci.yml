@@ -39,7 +39,8 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://install.surrealdb.com | sh -s -- --nightly
           (&>/dev/null $HOME/.surrealdb/surreal start --log trace --user root --pass root memory &)
-          cargo test --all-features
+          cargo test --features ws,http,mem
+          cd examples; for example in *; do cd $example; echo "Checking ${example} example"; cargo check; cd -; done
 
   lint:
     name: Lint
@@ -72,13 +73,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --all-features
+          args: --features ws,http,mem
 
       - name: Run Wasm cargo check
         uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --features http --target wasm32-unknown-unknown
+          args: --features ws,http,mem --target wasm32-unknown-unknown
 
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1

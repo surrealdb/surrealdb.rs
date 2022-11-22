@@ -29,18 +29,9 @@ use serde::Serialize;
 use std::mem;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
-use surrealdb::sql::statements::CreateStatement;
-use surrealdb::sql::statements::DeleteStatement;
-use surrealdb::sql::statements::SelectStatement;
-use surrealdb::sql::statements::UpdateStatement;
 use surrealdb::sql::Array;
-use surrealdb::sql::Data;
-use surrealdb::sql::Field;
-use surrealdb::sql::Fields;
-use surrealdb::sql::Output;
 use surrealdb::sql::Strand;
 use surrealdb::sql::Value;
-use surrealdb::sql::Values;
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::fs::OpenOptions;
 #[cfg(not(target_arch = "wasm32"))]
@@ -148,19 +139,20 @@ async fn query(request: RequestBuilder) -> Result<QueryResponse> {
 async fn take(one: bool, request: RequestBuilder) -> Result<Value> {
 	if let Some(result) = query(request).await?.into_inner().pop() {
 		let mut vec = result.into_inner()?;
-		match vec.pop() {
-			Some(Value::Array(Array(mut vec))) => {
-				if one {
+		match one {
+			true => match vec.pop() {
+				Some(Value::Array(Array(mut vec))) => {
 					if let [value] = &mut vec[..] {
 						return Ok(mem::take(value));
 					}
-				} else {
-					return Ok(Value::Array(Array(vec)));
 				}
-			}
-			Some(Value::None | Value::Null) | None => {}
-			Some(value) => {
-				return Ok(value);
+				Some(Value::None | Value::Null) | None => {}
+				Some(value) => {
+					return Ok(value);
+				}
+			},
+			false => {
+				return Ok(Value::Array(Array(vec)));
 			}
 		}
 	}
@@ -208,106 +200,6 @@ async fn health(request: RequestBuilder) -> Result<Value> {
 	Ok(Value::None)
 }
 
-fn split_params(params: &mut [Value]) -> (bool, Values, Value) {
-	let (what, data) = match params {
-		[what] => (mem::take(what), Value::None),
-		[what, data] => (mem::take(what), mem::take(data)),
-		_ => unreachable!(),
-	};
-	let one = what.is_thing();
-	let what = match what {
-		Value::Array(Array(vec)) => Values(vec),
-		value => Values(vec![value]),
-	};
-	(one, what, data)
-}
-
-fn create_statement(params: &mut [Value]) -> CreateStatement {
-	let (_, what, data) = split_params(params);
-	let data = match data {
-		Value::None => None,
-		value => Some(Data::ContentExpression(value)),
-	};
-	CreateStatement {
-		what,
-		data,
-		output: Some(Output::After),
-		..Default::default()
-	}
-}
-
-fn update_statement(params: &mut [Value]) -> (bool, UpdateStatement) {
-	let (one, what, data) = split_params(params);
-	let data = match data {
-		Value::None => None,
-		value => Some(Data::ContentExpression(value)),
-	};
-	(
-		one,
-		UpdateStatement {
-			what,
-			data,
-			output: Some(Output::After),
-			..Default::default()
-		},
-	)
-}
-
-fn patch_statement(params: &mut [Value]) -> (bool, UpdateStatement) {
-	let (one, what, data) = split_params(params);
-	let data = match data {
-		Value::None => None,
-		value => Some(Data::PatchExpression(value)),
-	};
-	(
-		one,
-		UpdateStatement {
-			what,
-			data,
-			output: Some(Output::Diff),
-			..Default::default()
-		},
-	)
-}
-
-fn merge_statement(params: &mut [Value]) -> (bool, UpdateStatement) {
-	let (one, what, data) = split_params(params);
-	let data = match data {
-		Value::None => None,
-		value => Some(Data::MergeExpression(value)),
-	};
-	(
-		one,
-		UpdateStatement {
-			what,
-			data,
-			output: Some(Output::After),
-			..Default::default()
-		},
-	)
-}
-
-fn select_statement(params: &mut [Value]) -> (bool, SelectStatement) {
-	let (one, what, _) = split_params(params);
-	(
-		one,
-		SelectStatement {
-			what,
-			expr: Fields(vec![Field::All]),
-			..Default::default()
-		},
-	)
-}
-
-fn delete_statement(params: &mut [Value]) -> DeleteStatement {
-	let (_, what, _) = split_params(params);
-	DeleteStatement {
-		what,
-		output: Some(Output::None),
-		..Default::default()
-	}
-}
-
 async fn router(
 	(method, param): (Method, Param),
 	base_url: &Url,
@@ -316,7 +208,12 @@ async fn router(
 	vars: &mut IndexMap<String, String>,
 	auth: &mut Option<Auth>,
 ) -> Result<DbResponse> {
-	let mut params = param.query;
+	let mut params = match param.query {
+		Some((query, bindings)) => {
+			vec![query.to_string().into(), bindings.into()]
+		}
+		None => param.other,
+	};
 
 	match method {
 		Method::Use => {
@@ -395,7 +292,7 @@ async fn router(
 		}
 		Method::Create => {
 			let path = base_url.join(SQL_PATH)?;
-			let statement = create_statement(&mut params);
+			let statement = crate::create_statement(&mut params);
 			let request =
 				client.post(path).headers(headers.clone()).auth(&auth).body(statement.to_string());
 			let value = take(true, request).await?;
@@ -403,7 +300,7 @@ async fn router(
 		}
 		Method::Update => {
 			let path = base_url.join(SQL_PATH)?;
-			let (one, statement) = update_statement(&mut params);
+			let (one, statement) = crate::update_statement(&mut params);
 			let request =
 				client.post(path).headers(headers.clone()).auth(&auth).body(statement.to_string());
 			let value = take(one, request).await?;
@@ -411,7 +308,7 @@ async fn router(
 		}
 		Method::Patch => {
 			let path = base_url.join(SQL_PATH)?;
-			let (one, statement) = patch_statement(&mut params);
+			let (one, statement) = crate::patch_statement(&mut params);
 			let request =
 				client.post(path).headers(headers.clone()).auth(&auth).body(statement.to_string());
 			let value = take(one, request).await?;
@@ -419,7 +316,7 @@ async fn router(
 		}
 		Method::Merge => {
 			let path = base_url.join(SQL_PATH)?;
-			let (one, statement) = merge_statement(&mut params);
+			let (one, statement) = crate::merge_statement(&mut params);
 			let request =
 				client.post(path).headers(headers.clone()).auth(&auth).body(statement.to_string());
 			let value = take(one, request).await?;
@@ -427,7 +324,7 @@ async fn router(
 		}
 		Method::Select => {
 			let path = base_url.join(SQL_PATH)?;
-			let (one, statement) = select_statement(&mut params);
+			let (one, statement) = crate::select_statement(&mut params);
 			let request =
 				client.post(path).headers(headers.clone()).auth(&auth).body(statement.to_string());
 			let value = take(one, request).await?;
@@ -435,7 +332,7 @@ async fn router(
 		}
 		Method::Delete => {
 			let path = base_url.join(SQL_PATH)?;
-			let statement = delete_statement(&mut params);
+			let statement = crate::delete_statement(&mut params);
 			let request =
 				client.post(path).headers(headers.clone()).auth(&auth).body(statement.to_string());
 			let value = take(true, request).await?;
@@ -458,6 +355,8 @@ async fn router(
 			let values = query(request).await?;
 			Ok(DbResponse::Query(values))
 		}
+		#[cfg(target_arch = "wasm32")]
+		Method::Export | Method::Import => unreachable!(),
 		#[cfg(not(target_arch = "wasm32"))]
 		Method::Export => {
 			let path = base_url.join(Method::Export.as_str()).unwrap();

@@ -3,6 +3,17 @@ mod http;
 #[cfg(feature = "ws")]
 mod ws;
 
+#[cfg(feature = "fdb")]
+mod fdb;
+#[cfg(feature = "indxdb")]
+mod indxdb;
+#[cfg(feature = "mem")]
+mod mem;
+#[cfg(feature = "rocksdb")]
+mod rocksdb;
+#[cfg(feature = "tikv")]
+mod tikv;
+
 use crate::Connection;
 use crate::Result;
 use url::Url;
@@ -22,10 +33,24 @@ pub enum Tls {
 	Rust(rustls::ClientConfig),
 }
 
+/// Enables `strict` server mode
+#[cfg(any(
+	feature = "mem",
+	feature = "tikv",
+	feature = "rocksdb",
+	feature = "fdb",
+	target_arch = "wasm32"
+))]
+#[derive(Debug)]
+pub struct Strict;
+
 /// A server address used to connect to the server
 #[derive(Debug)]
+#[allow(dead_code)] // used by the embedded and remote connections
 pub struct ServerAddrs {
 	pub(crate) endpoint: Url,
+	#[allow(dead_code)] // used by the embedded database
+	pub(crate) strict: bool,
 	#[cfg(any(feature = "native-tls", feature = "rustls"))]
 	pub(crate) tls_config: Option<Tls>,
 }

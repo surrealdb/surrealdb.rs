@@ -1,0 +1,12 @@
+[package]
+name = "transaction-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+surrealdb = { git = "https://github.com/rushmorem/surrealdb", branch = "suppress-warnings", default-features = false }
+surrealdb-rs = { path = "../..", features = ["mem"] }
+tokio = { version = "1.22.0", features = ["macros"] }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.16"

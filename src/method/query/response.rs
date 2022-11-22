@@ -151,7 +151,7 @@ impl AsRef<Vec<QueryResult>> for QueryResponse {
 /// Provides utility functions to deserialize items (of type [Value]) into any
 /// `<T>` that implements [DeserializeOwned].
 #[derive(Debug, Clone)]
-pub struct QueryResult(Result<Vec<Value>>);
+pub struct QueryResult(pub(crate) Result<Vec<Value>>);
 
 impl QueryResult {
 	/// Returns the deserialized `<T>` from the inner [Value]s over the given

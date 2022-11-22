@@ -1,10 +1,9 @@
-#![cfg(any(feature = "ws", feature = "http"))]
+#![allow(dead_code)] // used by test suites
 
 use serde::Deserialize;
 use serde::Serialize;
 
 pub const NS: &str = "test-ns";
-pub const DB: &str = "test-db";
 pub const ROOT_USER: &str = "root";
 pub const ROOT_PASS: &str = "root";
 pub const DB_ENDPOINT: &str = "localhost:8000";

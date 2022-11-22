@@ -7,10 +7,16 @@ mod commit;
 mod content;
 mod create;
 mod delete;
-#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
+#[cfg(all(
+	any(feature = "http", feature = "mem", feature = "tikv", feature = "rocksdb", feature = "fdb",),
+	not(target_arch = "wasm32")
+))]
 mod export;
 mod health;
-#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
+#[cfg(all(
+	any(feature = "http", feature = "mem", feature = "tikv", feature = "rocksdb", feature = "fdb",),
+	not(target_arch = "wasm32")
+))]
 mod import;
 mod invalidate;
 mod kill;
@@ -42,12 +48,42 @@ pub use commit::Commit;
 pub use content::Content;
 pub use create::Create;
 pub use delete::Delete;
-#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
-#[cfg_attr(docsrs, doc(cfg(all(feature = "http", not(target_arch = "wasm32")))))]
+#[cfg(all(
+	any(feature = "http", feature = "mem", feature = "tikv", feature = "rocksdb", feature = "fdb",),
+	not(target_arch = "wasm32")
+))]
+#[cfg_attr(
+	docsrs,
+	doc(cfg(all(
+		any(
+			feature = "http",
+			feature = "mem",
+			feature = "tikv",
+			feature = "rocksdb",
+			feature = "fdb",
+		),
+		not(target_arch = "wasm32")
+	)))
+)]
 pub use export::Export;
 pub use health::Health;
-#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
-#[cfg_attr(docsrs, doc(cfg(all(feature = "http", not(target_arch = "wasm32")))))]
+#[cfg(all(
+	any(feature = "http", feature = "mem", feature = "tikv", feature = "rocksdb", feature = "fdb",),
+	not(target_arch = "wasm32")
+))]
+#[cfg_attr(
+	docsrs,
+	doc(cfg(all(
+		any(
+			feature = "http",
+			feature = "mem",
+			feature = "tikv",
+			feature = "rocksdb",
+			feature = "fdb",
+		),
+		not(target_arch = "wasm32")
+	)))
+)]
 pub use import::Import;
 pub use invalidate::Invalidate;
 #[doc(hidden)] // Not supported yet
@@ -68,6 +104,18 @@ pub use use_ns::UseNs;
 pub use use_ns::UseNsDb;
 pub use version::Version;
 
+#[cfg(any(
+	feature = "mem",
+	feature = "tikv",
+	feature = "rocksdb",
+	feature = "fdb",
+	feature = "indxdb"
+))]
+use crate::embedded::Db;
+#[cfg(feature = "http")]
+use crate::net::HttpClient;
+#[cfg(feature = "ws")]
+use crate::net::WsClient;
 use crate::param;
 use crate::param::from_json;
 use crate::param::ToServerAddrs;
@@ -80,7 +128,10 @@ use once_cell::sync::OnceCell;
 use serde::Serialize;
 use serde_json::json;
 use std::marker::PhantomData;
-#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
+#[cfg(all(
+	any(feature = "http", feature = "mem", feature = "tikv", feature = "rocksdb", feature = "fdb",),
+	not(target_arch = "wasm32")
+))]
 use std::path::Path;
 use surrealdb::sql::Uuid;
 
@@ -97,14 +148,10 @@ pub enum Method {
 	/// Deletes a record from a table
 	Delete,
 	/// Exports a database
-	#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
-	#[cfg_attr(docsrs, doc(cfg(all(feature = "http", not(target_arch = "wasm32")))))]
 	Export,
 	/// Checks the health of the server
 	Health,
 	/// Imports a database
-	#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
-	#[cfg_attr(docsrs, doc(cfg(all(feature = "http", not(target_arch = "wasm32")))))]
 	Import,
 	/// Invalidates a session
 	Invalidate,
@@ -137,15 +184,14 @@ pub enum Method {
 }
 
 impl Method {
+	#[allow(dead_code)] // used by `ws` and `http`
 	pub(crate) fn as_str(&self) -> &str {
 		match self {
 			Method::Authenticate => "authenticate",
 			Method::Create => "create",
 			Method::Delete => "delete",
-			#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
 			Method::Export => "export",
 			Method::Health => "health",
-			#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
 			Method::Import => "import",
 			Method::Invalidate => "invalidate",
 			Method::Kill => "kill",
@@ -202,7 +248,7 @@ where
 	/// use surrealdb_rs::net::WsClient;
 	///
 	/// // Creates a new static instance of the client
-	/// static CLIENT: Surreal<WsClient> = Surreal::new();
+	/// static DB: Surreal<WsClient> = Surreal::new();
 	///
 	/// #[derive(Serialize, Deserialize)]
 	/// struct Person {
@@ -212,19 +258,19 @@ where
 	/// #[tokio::main]
 	/// async fn main() -> Result<()> {
 	///     // Connect to the database
-	///     CLIENT.connect::<Ws>("localhost:8000").await?;
+	///     DB.connect::<Ws>("localhost:8000").await?;
 	///
 	///     // Log into the database
-	///     CLIENT.signin(Root {
+	///     DB.signin(Root {
 	///         username: "root",
 	///         password: "root",
 	///     }).await?;
 	///
 	///     // Select a namespace + database
-	///     CLIENT.use_ns("test").use_db("test").await?;
+	///     DB.use_ns("test").use_db("test").await?;
 	///
 	///     // Create or update a specific record
-	///     let _tobie: Option<Person> = CLIENT.update(("person", "tobie"))
+	///     let _tobie: Option<Person> = DB.update(("person", "tobie"))
 	///         .content(Person {
 	///             name: "Tobie".into(),
 	///         }).await?;
@@ -243,15 +289,16 @@ where
 	/// # Examples
 	///
 	/// ```no_run
-	/// # use surrealdb_rs::{Result, Surreal};
-	/// # use surrealdb_rs::protocol::{Ws, Wss};
+	/// use surrealdb_rs::Surreal;
+	/// use surrealdb_rs::protocol::{Ws, Wss};
+	///
 	/// # #[tokio::main]
-	/// # async fn main() -> Result<()> {
+	/// # async fn main() -> surrealdb_rs::Result<()> {
 	/// // Connect to a local endpoint
-	/// let client = Surreal::connect::<Ws>("localhost:8000").await?;
+	/// let db = Surreal::connect::<Ws>("localhost:8000").await?;
 	///
 	/// // Connect to a remote endpoint
-	/// let client = Surreal::connect::<Wss>("cloud.surrealdb.com").await?;
+	/// let db = Surreal::connect::<Wss>("cloud.surrealdb.com").await?;
 	/// # Ok(())
 	/// # }
 	/// ```
@@ -281,8 +328,8 @@ where
 	/// # use surrealdb_rs::net::WsClient;
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
-	/// client.use_ns("test").use_db("test").await?;
+	/// # let db = Surreal::<WsClient>::new();
+	/// db.use_ns("test").use_db("test").await?;
 	/// # Ok(())
 	/// # }
 	/// ```
@@ -290,128 +337,6 @@ where
 		UseNs {
 			router: self.router.extract(),
 			ns: ns.into(),
-		}
-	}
-
-	/// Signs this connection up to a specific authentication scope
-	///
-	/// # Examples
-	///
-	/// ```no_run
-	/// # use surrealdb_rs::{Result, Surreal};
-	/// # use surrealdb_rs::net::WsClient;
-	/// # use surrealdb_rs::param::Scope;
-	/// # use serde::Serialize;
-	/// # #[derive(Serialize)]
-	/// # struct User<'a> {
-	/// #     email: &'a str,
-	/// #     pass: &'a str,
-	/// # }
-	/// # #[tokio::main]
-	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
-	/// let token = client.signup(Scope {
-	///     namespace: "test",
-	///     database: "test",
-	///     scope: "user",
-	///     params: User {
-	///         email: "info@surrealdb.com",
-	///         pass: "123456",
-	///     },
-	///   }).await?;
-	/// # Ok(())
-	/// # }
-	/// ```
-	pub fn signup<R>(
-		&self,
-		credentials: impl param::Credentials<param::Signup, R>,
-	) -> Signup<C, R> {
-		Signup {
-			router: self.router.extract(),
-			credentials: Ok(from_json(json!(credentials))),
-			response_type: PhantomData,
-		}
-	}
-
-	/// Signs this connection in to a specific authentication scope
-	///
-	/// # Examples
-	///
-	/// ```no_run
-	/// # use surrealdb_rs::{Result, Surreal};
-	/// # use surrealdb_rs::net::WsClient;
-	/// # use surrealdb_rs::param::Scope;
-	/// # use serde::Serialize;
-	/// # #[derive(Serialize)]
-	/// # struct User<'a> {
-	/// #     email: &'a str,
-	/// #     pass: &'a str,
-	/// # }
-	/// # #[tokio::main]
-	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
-	/// let token = client.signin(Scope {
-	///     namespace: "test",
-	///     database: "test",
-	///     scope: "user",
-	///     params: User {
-	///         email: "info@surrealdb.com",
-	///         pass: "123456",
-	///     },
-	///   }).await?;
-	/// # Ok(())
-	/// # }
-	/// ```
-	pub fn signin<R>(
-		&self,
-		credentials: impl param::Credentials<param::Signin, R>,
-	) -> Signin<C, R> {
-		Signin {
-			router: self.router.extract(),
-			credentials: Ok(from_json(json!(credentials))),
-			response_type: PhantomData,
-		}
-	}
-
-	/// Invalidates the authentication for the current connection
-	///
-	/// # Examples
-	///
-	/// ```no_run
-	/// # use surrealdb_rs::{Result, Surreal};
-	/// # use surrealdb_rs::net::WsClient;
-	/// # #[tokio::main]
-	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
-	/// client.invalidate().await?;
-	/// # Ok(())
-	/// # }
-	/// ```
-	pub fn invalidate(&self) -> Invalidate<C> {
-		Invalidate {
-			router: self.router.extract(),
-		}
-	}
-
-	/// Authenticates the current connection with a JWT token
-	///
-	/// # Examples
-	///
-	/// ```no_run
-	/// # use surrealdb_rs::{Result, Surreal};
-	/// # use surrealdb_rs::net::WsClient;
-	/// # #[tokio::main]
-	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
-	/// # let token = String::new();
-	/// client.authenticate(token).await?;
-	/// # Ok(())
-	/// # }
-	/// ```
-	pub fn authenticate(&self, token: impl Into<param::Jwt>) -> Authenticate<C> {
-		Authenticate {
-			router: self.router.extract(),
-			token: token.into(),
 		}
 	}
 
@@ -431,16 +356,16 @@ where
 	///
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
+	/// # let db = Surreal::<WsClient>::new();
 	/// // Assign the variable on the connection
-	/// client.set("name", Name {
+	/// db.set("name", Name {
 	///     first: "Tobie",
 	///     last: "Morgan Hitchcock",
 	/// }).await?;
 	/// // Use the variable in a subsequent query
-	/// client.query("CREATE person SET name = $name").await?;
+	/// db.query("CREATE person SET name = $name").await?;
 	/// // Use the variable in a subsequent query
-	/// client.query("SELECT * FROM person WHERE name.first = $name.first").await?;
+	/// db.query("SELECT * FROM person WHERE name.first = $name.first").await?;
 	/// # Ok(())
 	/// # }
 	/// ```
@@ -468,16 +393,16 @@ where
 	///
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
+	/// # let db = Surreal::<WsClient>::new();
 	/// // Assign the variable on the connection
-	/// client.set("name", Name {
+	/// db.set("name", Name {
 	///     first: "Tobie",
 	///     last: "Morgan Hitchcock",
 	/// }).await?;
 	/// // Use the variable in a subsequent query
-	/// client.query("CREATE person SET name = $name").await?;
+	/// db.query("CREATE person SET name = $name").await?;
 	/// // Remove the variable from the connection
-	/// client.unset("name").await?;
+	/// db.unset("name").await?;
 	/// # Ok(())
 	/// # }
 	/// ```
@@ -501,9 +426,9 @@ where
 	/// # struct Person;
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
+	/// # let db = Surreal::<WsClient>::new();
 	/// // Run queries
-	/// let mut result = client
+	/// let result = db
 	///     .query("CREATE person")
 	///     .query("SELECT * FROM type::table($tb)")
 	///     .bind("tb", "person")
@@ -535,13 +460,13 @@ where
 	/// # struct Person;
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
+	/// # let db = Surreal::<WsClient>::new();
 	/// // Select all records from a table
-	/// let people: Vec<Person> = client.select("person").await?;
+	/// let people: Vec<Person> = db.select("person").await?;
 	/// // Select a specific record from a table
-	/// let person: Option<Person> = client.select(("person", "h5wxrf2ewk8xjxosxtyc")).await?;
+	/// let person: Option<Person> = db.select(("person", "h5wxrf2ewk8xjxosxtyc")).await?;
 	/// // You can skip an unnecessary option if you know the record already exists
-	/// let person: Person = client.select(("person", "h5wxrf2ewk8xjxosxtyc")).await?;
+	/// let person: Person = db.select(("person", "h5wxrf2ewk8xjxosxtyc")).await?;
 	/// # Ok(())
 	/// # }
 	/// ```
@@ -576,11 +501,11 @@ where
 	/// # }
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
+	/// # let db = Surreal::<WsClient>::new();
 	/// // Create a record with a random ID
-	/// let person: Person = client.create("person").await?;
+	/// let person: Person = db.create("person").await?;
 	/// // Create a record with a specific ID
-	/// let record: Person = client.create(("person", "tobie"))
+	/// let record: Person = db.create(("person", "tobie"))
 	///     .content(User {
 	///         name: "Tobie",
 	///         settings: Settings {
@@ -624,11 +549,11 @@ where
 	/// # }
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
+	/// # let db = Surreal::<WsClient>::new();
 	/// // Update all records in a table
-	/// let people: Vec<Person> = client.update("person").await?;
+	/// let people: Vec<Person> = db.update("person").await?;
 	/// // Update a record with a specific ID
-	/// let person: Option<Person> = client.update(("person", "tobie"))
+	/// let person: Option<Person> = db.update(("person", "tobie"))
 	///     .content(User {
 	///         name: "Tobie",
 	///         settings: Settings {
@@ -665,15 +590,15 @@ where
 	/// # }
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
+	/// # let db = Surreal::<WsClient>::new();
 	/// // Update all records in a table
-	/// let people: Vec<Person> = client.update("person")
+	/// let people: Vec<Person> = db.update("person")
 	///     .merge(UpdatedAt {
 	///         updated_at: OffsetDateTime::now_utc(),
 	///     })
 	///     .await?;
 	/// // Update a record with a specific ID
-	/// let person: Option<Person> = client.update(("person", "tobie"))
+	/// let person: Option<Person> = db.update(("person", "tobie"))
 	///     .merge(User {
 	///         updated_at: OffsetDateTime::now_utc(),
 	///         settings: Settings {
@@ -710,13 +635,13 @@ where
 	/// # }
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
+	/// # let db = Surreal::<WsClient>::new();
 	/// // Update all records in a table
-	/// let people: Vec<Person> = client.update("person")
+	/// let people: Vec<Person> = db.update("person")
 	///     .patch(PatchOp::replace("/created_at", OffsetDateTime::now_utc()))
 	///     .await?;
 	/// // Update a record with a specific ID
-	/// let person: Option<Person> = client.update(("person", "tobie"))
+	/// let person: Option<Person> = db.update(("person", "tobie"))
 	///     .patch(PatchOp::replace("/settings/active", false))
 	///     .patch(PatchOp::add("/tags", ["developer", "engineer"]))
 	///     .patch(PatchOp::remove("/temp"))
@@ -742,11 +667,11 @@ where
 	/// # use surrealdb_rs::net::WsClient;
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
+	/// # let db = Surreal::<WsClient>::new();
 	/// // Delete all records from a table
-	/// client.delete("person").await?;
+	/// db.delete("person").await?;
 	/// // Delete a specific record from a table
-	/// client.delete(("person", "h5wxrf2ewk8xjxosxtyc")).await?;
+	/// db.delete(("person", "h5wxrf2ewk8xjxosxtyc")).await?;
 	/// # Ok(())
 	/// # }
 	/// ```
@@ -768,8 +693,8 @@ where
 	/// # use surrealdb_rs::net::WsClient;
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
-	/// let version = client.version().await?;
+	/// # let db = Surreal::<WsClient>::new();
+	/// let version = db.version().await?;
 	/// # Ok(())
 	/// # }
 	/// ```
@@ -788,8 +713,8 @@ where
 	/// # use surrealdb_rs::net::WsClient;
 	/// # #[tokio::main]
 	/// # async fn main() -> Result<()> {
-	/// # let client = Surreal::<WsClient>::new();
-	/// client.health().await?;
+	/// # let db = Surreal::<WsClient>::new();
+	/// db.health().await?;
 	/// # Ok(())
 	/// # }
 	/// ```
@@ -814,76 +739,113 @@ where
 			table_name: table_name.into(),
 		}
 	}
+}
 
-	/// Dumps the database contents to a file
-	///
-	/// # Examples
-	///
-	/// ```no_run
-	/// # use surrealdb_rs::{Result, Surreal};
-	/// # use surrealdb_rs::param::Root;
-	/// # use surrealdb_rs::protocol::Http;
-	/// # #[tokio::main]
-	/// # async fn main() -> Result<()> {
-	/// // Connect to the database server
-	/// let client = Surreal::connect::<Http>("localhost:8000").await?;
-	/// // Log into the server
-	/// client.signin(Root {
-	///     username: "root",
-	///     password: "root",
-	/// }).await?;
-	/// // Select the database to export
-	/// client.use_ns("test").use_db("test").await?;
-	/// // Export the database
-	/// client.export("backup.sql").await?;
-	/// # Ok(())
-	/// # }
-	/// ```
-	#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
-	#[cfg_attr(docsrs, doc(cfg(all(feature = "http", not(target_arch = "wasm32")))))]
-	pub fn export<P>(&self, file: P) -> Export<C>
-	where
-		P: AsRef<Path>,
-	{
-		Export {
-			router: self.router.extract(),
-			file: file.as_ref().to_owned(),
+#[allow(unused_macros)] // used by `ws` and `http`
+macro_rules! auth_methods {
+	($client:ty) => {
+		/// Signs this connection up to a specific authentication scope
+		pub fn signup<R>(
+			&self,
+			credentials: impl param::Credentials<param::Signup, R>,
+		) -> Signup<$client, R> {
+			Signup {
+				router: self.router.extract(),
+				credentials: Ok(from_json(json!(credentials))),
+				response_type: PhantomData,
+			}
 		}
-	}
 
-	/// Restores the database from a file
-	///
-	/// # Examples
-	///
-	/// ```no_run
-	/// # use surrealdb_rs::{Result, Surreal};
-	/// # use surrealdb_rs::param::Root;
-	/// # use surrealdb_rs::protocol::Http;
-	/// # #[tokio::main]
-	/// # async fn main() -> Result<()> {
-	/// // Connect to the database server
-	/// let client = Surreal::connect::<Http>("localhost:8000").await?;
-	/// // Log into the server
-	/// client.signin(Root {
-	///     username: "root",
-	///     password: "root",
-	/// }).await?;
-	/// // Select the database to import into
-	/// client.use_ns("test").use_db("test").await?;
-	/// // Import the database
-	/// client.import("backup.sql").await?;
-	/// # Ok(())
-	/// # }
-	/// ```
-	#[cfg(all(feature = "http", not(target_arch = "wasm32")))]
-	#[cfg_attr(docsrs, doc(cfg(all(feature = "http", not(target_arch = "wasm32")))))]
-	pub fn import<P>(&self, file: P) -> Import<C>
-	where
-		P: AsRef<Path>,
-	{
-		Import {
-			router: self.router.extract(),
-			file: file.as_ref().to_owned(),
+		/// Signs this connection in to a specific authentication scope
+		pub fn signin<R>(
+			&self,
+			credentials: impl param::Credentials<param::Signin, R>,
+		) -> Signin<$client, R> {
+			Signin {
+				router: self.router.extract(),
+				credentials: Ok(from_json(json!(credentials))),
+				response_type: PhantomData,
+			}
 		}
-	}
+
+		/// Invalidates the authentication for the current connection
+		pub fn invalidate(&self) -> Invalidate<$client> {
+			Invalidate {
+				router: self.router.extract(),
+			}
+		}
+
+		/// Authenticates the current connection with a JWT token
+		pub fn authenticate(&self, token: impl Into<param::Jwt>) -> Authenticate<$client> {
+			Authenticate {
+				router: self.router.extract(),
+				token: token.into(),
+			}
+		}
+	};
+}
+
+#[allow(unused_macros)] // used by the embedded database and `http`
+macro_rules! backup_methods {
+	($client:ty) => {
+		/// Dumps the database contents to a file
+		#[cfg(not(target_arch = "wasm32"))]
+		#[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
+		pub fn export<P>(&self, file: P) -> Export<$client>
+		where
+			P: AsRef<Path>,
+		{
+			Export {
+				router: self.router.extract(),
+				file: file.as_ref().to_owned(),
+			}
+		}
+
+		/// Restores the database from a file
+		#[cfg(not(target_arch = "wasm32"))]
+		#[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
+		pub fn import<P>(&self, file: P) -> Import<$client>
+		where
+			P: AsRef<Path>,
+		{
+			Import {
+				router: self.router.extract(),
+				file: file.as_ref().to_owned(),
+			}
+		}
+	};
+}
+
+#[cfg(feature = "ws")]
+#[cfg_attr(docsrs, doc(cfg(feature = "ws")))]
+impl Surreal<WsClient> {
+	auth_methods!(WsClient);
+}
+
+#[cfg(feature = "http")]
+#[cfg_attr(docsrs, doc(cfg(feature = "http")))]
+impl Surreal<HttpClient> {
+	auth_methods!(HttpClient);
+	backup_methods!(HttpClient);
+}
+
+#[cfg(any(
+	feature = "mem",
+	feature = "tikv",
+	feature = "rocksdb",
+	feature = "fdb",
+	feature = "indxdb"
+))]
+#[cfg_attr(
+	docsrs,
+	doc(cfg(any(
+		feature = "mem",
+		feature = "tikv",
+		feature = "rocksdb",
+		feature = "fdb",
+		feature = "indxdb"
+	)))
+)]
+impl Surreal<Db> {
+	backup_methods!(Db);
 }

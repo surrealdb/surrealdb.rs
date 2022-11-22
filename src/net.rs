@@ -1,4 +1,4 @@
-//! Networking clients for communicating with the server
+//! Clients for communicating with remote servers
 
 #[cfg(feature = "http")]
 #[cfg_attr(docsrs, doc(cfg(feature = "http")))]

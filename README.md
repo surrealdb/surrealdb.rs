@@ -12,15 +12,15 @@ View the [features](https://surrealdb.com/features), the latest [releases](https
 
 <h2><img height="20" src="https://github.com/surrealdb/surrealdb/blob/main/img/features.svg?raw=true">&nbsp;&nbsp;Features</h2>
 
-- [x] WebSocket connections
-- [x] HTTP connections
+- [x] Connects to remote servers (`Surreal<WsClient>` or `Surreal<HttpClient>`)
+- [x] Can be used as an embedded database (`Surreal<Db>`)
 - [x] Compiles to WebAssembly
 - [x] Supports typed SQL statements
 - [x] Invalid SQL queries are never sent to the server, the client uses the same parser the server uses
 - [x] Static clients, no need for `once_cell` or `lazy_static`
 - [x] Clonable connections with auto-reconnect capabilities, no need for a connection pool
 - [x] Range queries
-- [x] Consistent API across all supported protocols, just change the scheme on the `connect` method and you are good to go
+- [x] Consistent API across all supported protocols or storage engines
 - [x] Asynchronous, lock-free connections
 - [x] TLS support via either [`rustls`](https://crates.io/crates/rustls) or [`native-tls`](https://crates.io/crates/native-tls)
 - [ ] FFI bindings for third-party languages
@@ -64,21 +64,20 @@ struct Person {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let client = Surreal::connect::<Ws>("localhost:8000").await?;
+    let db = Surreal::connect::<Ws>("localhost:8000").await?;
 
     // Signin as a namespace, database, or root user
-    client
-        .signin(Root {
-            username: "root",
-            password: "root",
-        })
-        .await?;
+    db.signin(Root {
+        username: "root",
+        password: "root",
+    })
+    .await?;
 
     // Select a specific namespace and database
-    client.use_ns("test").use_db("test").await?;
+    db.use_ns("test").use_db("test").await?;
 
     // Create a new person with a random ID
-    let tobie: Person = client
+    let tobie: Person = db
         .create("person")
         .content(Person {
             id: None,
@@ -94,7 +93,7 @@ async fn main() -> Result<()> {
     assert!(tobie.id.is_some());
 
     // Create a new person with a specific ID
-    let mut jaime: Person = client
+    let mut jaime: Person = db
         .create(("person", "jaime"))
         .content(Person {
             id: None,
@@ -110,7 +109,7 @@ async fn main() -> Result<()> {
     assert_eq!(jaime.id.unwrap(), "person:jaime");
 
     // Update a person record with a specific ID
-    jaime = client
+    jaime = db
         .update(("person", "jaime"))
         .merge(json!({ "marketing": true }))
         .await?;
@@ -118,12 +117,13 @@ async fn main() -> Result<()> {
     assert!(jaime.marketing);
 
     // Select all people records
-    let people: Vec<Person> = client.select("person").await?;
+    let people: Vec<Person> = db.select("person").await?;
 
     assert!(!people.is_empty());
 
     // Perform a custom advanced query
-    let groups = client
+    #[rustfmt::skip]
+    let groups = db
         .query("
             SELECT marketing,
                    count()
@@ -136,10 +136,10 @@ async fn main() -> Result<()> {
     dbg!(groups);
 
     // Delete all people upto but not including Jaime
-    client.delete("person").range(.."jaime").await?;
+    db.delete("person").range(.."jaime").await?;
 
     // Delete all people
-    client.delete("person").await?;
+    db.delete("person").await?;
 
     Ok(())
 }

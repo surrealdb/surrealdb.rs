@@ -15,6 +15,7 @@ impl ToServerAddrs<Ws> for &str {
 	fn to_server_addrs(self) -> Result<ServerAddrs> {
 		Ok(ServerAddrs {
 			endpoint: Url::parse(&format!("ws://{self}"))?,
+			strict: false,
 			#[cfg(any(feature = "native-tls", feature = "rustls"))]
 			tls_config: None,
 		})
@@ -27,6 +28,7 @@ impl ToServerAddrs<Ws> for SocketAddr {
 	fn to_server_addrs(self) -> Result<ServerAddrs> {
 		Ok(ServerAddrs {
 			endpoint: Url::parse(&format!("ws://{self}"))?,
+			strict: false,
 			#[cfg(any(feature = "native-tls", feature = "rustls"))]
 			tls_config: None,
 		})
@@ -39,6 +41,7 @@ impl ToServerAddrs<Ws> for String {
 	fn to_server_addrs(self) -> Result<ServerAddrs> {
 		Ok(ServerAddrs {
 			endpoint: Url::parse(&format!("ws://{self}"))?,
+			strict: false,
 			#[cfg(any(feature = "native-tls", feature = "rustls"))]
 			tls_config: None,
 		})
@@ -51,6 +54,7 @@ impl ToServerAddrs<Wss> for &str {
 	fn to_server_addrs(self) -> Result<ServerAddrs> {
 		Ok(ServerAddrs {
 			endpoint: Url::parse(&format!("wss://{self}"))?,
+			strict: false,
 			#[cfg(any(feature = "native-tls", feature = "rustls"))]
 			tls_config: None,
 		})
@@ -63,6 +67,7 @@ impl ToServerAddrs<Wss> for SocketAddr {
 	fn to_server_addrs(self) -> Result<ServerAddrs> {
 		Ok(ServerAddrs {
 			endpoint: Url::parse(&format!("wss://{self}"))?,
+			strict: false,
 			#[cfg(any(feature = "native-tls", feature = "rustls"))]
 			tls_config: None,
 		})
@@ -75,6 +80,7 @@ impl ToServerAddrs<Wss> for String {
 	fn to_server_addrs(self) -> Result<ServerAddrs> {
 		Ok(ServerAddrs {
 			endpoint: Url::parse(&format!("wss://{self}"))?,
+			strict: false,
 			#[cfg(any(feature = "native-tls", feature = "rustls"))]
 			tls_config: None,
 		})

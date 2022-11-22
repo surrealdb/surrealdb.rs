@@ -43,12 +43,10 @@ where
 			for query in self.query {
 				statements.extend(query?);
 			}
-			let mut param = vec![sql::Query(Statements(statements)).to_string().into()];
-			if !self.bindings.is_empty() {
-				param.push(self.bindings.into());
-			}
+			let query = sql::Query(Statements(statements));
+			let param = Param::query(query, self.bindings);
 			let mut conn = Client::new(Method::Query);
-			conn.execute_query(self.router?, Param::new(param)).await
+			conn.execute_query(self.router?, param).await
 		})
 	}
 }

@@ -4,9 +4,9 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(test, deny(warnings))]
 
-//! This SurrealDB library enables simple and advanced querying of a remote database from
-//! server-side code. All connections to SurrealDB are made over WebSockets by default (HTTP is
-//! also supported), and automatically reconnect when the connection is terminated.
+//! This SurrealDB library enables simple and advanced querying of a remote or embedded database from
+//! server-side or client-side code. All connections to SurrealDB are made over WebSockets by default (HTTP
+//! and embedded databases are also supported), and automatically reconnect when the connection is terminated.
 //!
 //! # Examples
 //!
@@ -35,19 +35,19 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     let client = Surreal::connect::<Ws>("127.0.0.1:8000").await?;
+//!     let db = Surreal::connect::<Ws>("127.0.0.1:8000").await?;
 //!
 //!     // Signin as a namespace, database, or root user
-//!     client.signin(Root {
+//!     db.signin(Root {
 //!         username: "root",
 //!         password: "root",
 //!     }).await?;
 //!
 //!     // Select a specific namespace / database
-//!     client.use_ns("test").use_db("test").await?;
+//!     db.use_ns("test").use_db("test").await?;
 //!
 //!     // Create a new person with a random ID
-//!     let created: Person = client.create("person")
+//!     let created: Person = db.create("person")
 //!         .content(Person {
 //!             title: "Founder & CEO".into(),
 //!             name: Name {
@@ -60,7 +60,7 @@
 //!         .await?;
 //!
 //!     // Create a new person with a specific ID
-//!     let created: Person = client.create(("person", "jaime"))
+//!     let created: Person = db.create(("person", "jaime"))
 //!         .content(Person {
 //!             title: "Founder & COO".into(),
 //!             name: Name {
@@ -73,15 +73,15 @@
 //!         .await?;
 //!
 //!     // Update a person record with a specific ID
-//!     let updated: Person = client.update(("person", "jaime"))
+//!     let updated: Person = db.update(("person", "jaime"))
 //!         .merge(json!({"marketing": true}))
 //!         .await?;
 //!
 //!     // Select all people records
-//!     let people: Vec<Person> = client.select("person").await?;
+//!     let people: Vec<Person> = db.select("person").await?;
 //!
 //!     // Perform a custom advanced query
-//!     let groups = client
+//!     let groups = db
 //!         .query("SELECT marketing, count() FROM type::table($tb) GROUP BY marketing")
 //!         .bind("tb", "person")
 //!         .await?;
@@ -90,13 +90,28 @@
 //! }
 //! ```
 
-#[cfg(not(any(feature = "http", feature = "ws")))]
-compile_error!("Either feature \"http\" or \"ws\" must be enabled for this crate.");
-
 mod err;
 
 pub mod method;
 
+#[cfg(any(
+	feature = "mem",
+	feature = "tikv",
+	feature = "rocksdb",
+	feature = "fdb",
+	feature = "indxdb",
+))]
+#[cfg_attr(
+	docsrs,
+	doc(cfg(any(
+		feature = "mem",
+		feature = "tikv",
+		feature = "rocksdb",
+		feature = "fdb",
+		feature = "indxdb",
+	)))
+)]
+pub mod embedded;
 #[cfg(any(feature = "http", feature = "ws"))]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "http", feature = "ws"))))]
 pub mod net;
@@ -104,6 +119,24 @@ pub mod param;
 #[cfg(any(feature = "http", feature = "ws"))]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "http", feature = "ws"))))]
 pub mod protocol;
+#[cfg(any(
+	feature = "mem",
+	feature = "tikv",
+	feature = "rocksdb",
+	feature = "fdb",
+	feature = "indxdb",
+))]
+#[cfg_attr(
+	docsrs,
+	doc(cfg(any(
+		feature = "mem",
+		feature = "tikv",
+		feature = "rocksdb",
+		feature = "fdb",
+		feature = "indxdb",
+	)))
+)]
+pub mod storage;
 
 pub use err::Error;
 pub use err::ErrorKind;
@@ -122,13 +155,24 @@ use std::fmt::Debug;
 use std::future::Future;
 use std::future::IntoFuture;
 use std::marker::PhantomData;
+use std::mem;
 use std::pin::Pin;
 #[cfg(feature = "ws")]
 use std::sync::atomic::AtomicI64;
 #[cfg(feature = "ws")]
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use surrealdb::sql::statements::CreateStatement;
+use surrealdb::sql::statements::DeleteStatement;
+use surrealdb::sql::statements::SelectStatement;
+use surrealdb::sql::statements::UpdateStatement;
+use surrealdb::sql::Array;
+use surrealdb::sql::Data;
+use surrealdb::sql::Field;
+use surrealdb::sql::Fields;
+use surrealdb::sql::Output;
 use surrealdb::sql::Value;
+use surrealdb::sql::Values;
 
 /// Result type returned by the client
 pub type Result<T> = std::result::Result<T, Error>;
@@ -235,7 +279,7 @@ where
 	/// use surrealdb_rs::protocol::Ws;
 	/// use surrealdb_rs::Surreal;
 	///
-	/// let client = Surreal::connect::<Ws>("localhost:8000")
+	/// let db = Surreal::connect::<Ws>("localhost:8000")
 	///     .with_capacity(100_000)
 	///     .await?;
 	/// # Ok(())
@@ -292,6 +336,7 @@ where
 }
 
 #[derive(Debug)]
+#[allow(dead_code)] // used by the embedded and remote connections
 struct Route<A, R> {
 	request: A,
 	response: Sender<R>,
@@ -348,7 +393,7 @@ where
 					let server_build = &version.build;
 					if !req.matches(&version) {
 						tracing::warn!("server version `{version}` does not match the range supported by the client `{versions}`");
-					} else if server_build < &build_meta {
+					} else if !server_build.is_empty() && server_build < &build_meta {
 						tracing::warn!("server build `{server_build}` is older than the minimum supported build `{build_meta}`");
 					}
 				}
@@ -399,4 +444,111 @@ where
 
 fn connection_uninitialised() -> Error {
 	ErrorKind::ConnectionUninitialized.with_message("connection uninitialized")
+}
+
+#[allow(dead_code)] // used by the the embedded database and `http`
+fn split_params(params: &mut [Value]) -> (bool, Values, Value) {
+	let (what, data) = match params {
+		[what] => (mem::take(what), Value::None),
+		[what, data] => (mem::take(what), mem::take(data)),
+		_ => unreachable!(),
+	};
+	let one = what.is_thing();
+	let what = match what {
+		Value::Array(Array(vec)) => Values(vec),
+		value => Values(vec![value]),
+	};
+	(one, what, data)
+}
+
+#[allow(dead_code)] // used by the the embedded database and `http`
+fn create_statement(params: &mut [Value]) -> CreateStatement {
+	let (_, what, data) = split_params(params);
+	let data = match data {
+		Value::None => None,
+		value => Some(Data::ContentExpression(value)),
+	};
+	CreateStatement {
+		what,
+		data,
+		output: Some(Output::After),
+		..Default::default()
+	}
+}
+
+#[allow(dead_code)] // used by the the embedded database and `http`
+fn update_statement(params: &mut [Value]) -> (bool, UpdateStatement) {
+	let (one, what, data) = split_params(params);
+	let data = match data {
+		Value::None => None,
+		value => Some(Data::ContentExpression(value)),
+	};
+	(
+		one,
+		UpdateStatement {
+			what,
+			data,
+			output: Some(Output::After),
+			..Default::default()
+		},
+	)
+}
+
+#[allow(dead_code)] // used by the the embedded database and `http`
+fn patch_statement(params: &mut [Value]) -> (bool, UpdateStatement) {
+	let (one, what, data) = split_params(params);
+	let data = match data {
+		Value::None => None,
+		value => Some(Data::PatchExpression(value)),
+	};
+	(
+		one,
+		UpdateStatement {
+			what,
+			data,
+			output: Some(Output::Diff),
+			..Default::default()
+		},
+	)
+}
+
+#[allow(dead_code)] // used by the the embedded database and `http`
+fn merge_statement(params: &mut [Value]) -> (bool, UpdateStatement) {
+	let (one, what, data) = split_params(params);
+	let data = match data {
+		Value::None => None,
+		value => Some(Data::MergeExpression(value)),
+	};
+	(
+		one,
+		UpdateStatement {
+			what,
+			data,
+			output: Some(Output::After),
+			..Default::default()
+		},
+	)
+}
+
+#[allow(dead_code)] // used by the the embedded database and `http`
+fn select_statement(params: &mut [Value]) -> (bool, SelectStatement) {
+	let (one, what, _) = split_params(params);
+	(
+		one,
+		SelectStatement {
+			what,
+			expr: Fields(vec![Field::All]),
+			..Default::default()
+		},
+	)
+}
+
+#[allow(dead_code)] // used by the the embedded database and `http`
+fn delete_statement(params: &mut [Value]) -> DeleteStatement {
+	let (_, what, _) = split_params(params);
+	DeleteStatement {
+		what,
+		output: Some(Output::None),
+		..Default::default()
+	}
 }

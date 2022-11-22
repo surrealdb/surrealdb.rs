@@ -24,7 +24,7 @@ pub(super) fn mock(route_rx: Receiver<Option<Route<(Method, Param), Result<DbRes
 		})) = stream.next().await
 		{
 			let (method, param) = request;
-			let params = param.query;
+			let params = param.other;
 
 			let result = match method {
 				Method::Invalidate | Method::Health => match &params[..] {
@@ -73,8 +73,8 @@ pub(super) fn mock(route_rx: Receiver<Option<Route<(Method, Param), Result<DbRes
 					[_] => Ok(DbResponse::Other(Value::None)),
 					_ => unreachable!(),
 				},
-				Method::Query => match &params[..] {
-					[_] | [_, _] => Ok(DbResponse::Query(QueryResponse::new())),
+				Method::Query => match param.query {
+					Some(_) => Ok(DbResponse::Query(QueryResponse::new())),
 					_ => unreachable!(),
 				},
 				Method::Create => match &params[..] {
@@ -103,16 +103,7 @@ pub(super) fn mock(route_rx: Receiver<Option<Route<(Method, Param), Result<DbRes
 					[_] => Ok(DbResponse::Other(Value::None)),
 					_ => unreachable!(),
 				},
-				#[cfg(feature = "http")]
-				Method::Export => match param.file {
-					Some(..) => Ok(DbResponse::Other(Value::None)),
-					_ => unreachable!(),
-				},
-				#[cfg(feature = "http")]
-				Method::Import => match param.file {
-					Some(..) => Ok(DbResponse::Other(Value::None)),
-					_ => unreachable!(),
-				},
+				Method::Export | Method::Import => unreachable!(),
 			};
 
 			if let Err(message) = response.into_send_async(result).await {
