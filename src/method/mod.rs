@@ -56,6 +56,7 @@ pub use kill::Kill;
 pub use live::Live;
 pub use merge::Merge;
 pub use patch::Patch;
+pub use query::response as query_response;
 pub use query::Query;
 pub use select::Select;
 pub use set::Set;
