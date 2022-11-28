@@ -107,6 +107,7 @@ pub mod protocol;
 
 pub use err::Error;
 pub use err::ErrorKind;
+use method::query_response::QueryResponse;
 
 use crate::param::ServerAddrs;
 use crate::param::ToServerAddrs;
@@ -133,7 +134,7 @@ use surrealdb::sql::Value;
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Response type returned by the `query` method
-pub type Response = Vec<Result<Vec<Value>>>;
+pub type Response = QueryResponse;
 
 const SUPPORTED_VERSIONS: (&str, &str) = (">=1.0.0-beta.8, <2.0.0", "20221030.c12a1cc");
 

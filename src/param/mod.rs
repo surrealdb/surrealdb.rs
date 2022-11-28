@@ -161,7 +161,7 @@ impl Param {
 #[derive(Debug)]
 pub enum DbResponse {
     /// The response sent for the `query` method
-    Query(Vec<Result<Vec<sql::Value>>>),
+    Query(crate::Response),
     /// The response sent for any method except `query`
     Other(sql::Value),
 }
