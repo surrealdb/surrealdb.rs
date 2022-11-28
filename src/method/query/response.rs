@@ -39,11 +39,6 @@ impl QueryResponse {
         &self.0[n]
     }
 
-    /// Returns a reference to all of the results from the response.
-    pub fn all(&self) -> &Vec<QueryResult> {
-        &self.0
-    }
-
     /// Returns the deserialized [`<T>`] from the inner [Value]s over the given
     /// range or index for the query at `query_index`.
     ///
@@ -138,6 +133,12 @@ impl Index<usize> for QueryResponse {
 
     fn index(&self, index: usize) -> &Self::Output {
         &self.0[index]
+    }
+}
+
+impl AsRef<Vec<QueryResult>> for QueryResponse {
+    fn as_ref(&self) -> &Vec<QueryResult> {
+        &self.0
     }
 }
 
