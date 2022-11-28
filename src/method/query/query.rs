@@ -20,9 +20,9 @@ use surrealdb::sql::Value;
 /// A query future
 #[derive(Debug)]
 pub struct Query<'r, C: Connection> {
-    pub(super) router: Result<&'r Router<C>>,
-    pub(super) query: Vec<Result<Vec<Statement>>>,
-    pub(super) bindings: BTreeMap<String, Value>,
+    pub(in super::super) router: Result<&'r Router<C>>,
+    pub(in super::super) query: Vec<Result<Vec<Statement>>>,
+    pub(in super::super) bindings: BTreeMap<String, Value>,
 }
 
 impl<'r, Client> IntoFuture for Query<'r, Client>
