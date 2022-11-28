@@ -1,4 +1,5 @@
 use super::PATH;
+use crate::method::query_response::QueryResponse;
 use crate::param::from_value;
 use crate::param::DbResponse;
 use crate::param::Param;
@@ -13,7 +14,6 @@ use crate::protocol::ws::PING_METHOD;
 use crate::Connection;
 use crate::ErrorKind;
 use crate::Method;
-use crate::Response as QueryResponse;
 use crate::Result;
 use crate::Route;
 use crate::Router;

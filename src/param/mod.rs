@@ -6,6 +6,7 @@ mod query;
 mod resource;
 mod server_addrs;
 
+use crate::method::query_response::QueryResponse;
 use crate::Result;
 use dmp::Diff;
 use serde::de::DeserializeOwned;
@@ -161,7 +162,7 @@ impl Param {
 #[derive(Debug)]
 pub enum DbResponse {
     /// The response sent for the `query` method
-    Query(crate::Response),
+    Query(QueryResponse),
     /// The response sent for any method except `query`
     Other(sql::Value),
 }
