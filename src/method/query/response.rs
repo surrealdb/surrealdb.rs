@@ -24,6 +24,11 @@ impl QueryResponse {
         Self(Default::default())
     }
 
+    /// Unwrap into the inner list of query results
+    pub fn into_inner(self) -> Vec<QueryResult> {
+        self.0
+    }
+
     /// Returns a reference the result for the `n`-th query from the response. If
     /// no result is found at this index then [None] is returned.
     pub fn get_query(&self, n: usize) -> Option<&QueryResult> {
