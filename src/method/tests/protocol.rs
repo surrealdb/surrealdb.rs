@@ -1,4 +1,5 @@
 use super::server;
+use crate::method::query_response::QueryResponse;
 use crate::param::from_value;
 use crate::param::DbResponse;
 use crate::param::Param;
@@ -19,7 +20,6 @@ use std::pin::Pin;
 #[cfg(feature = "ws")]
 use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
-use surrealdb::sql::Value;
 use url::Url;
 
 #[derive(Debug)]
@@ -110,7 +110,7 @@ impl Connection for Client {
     fn recv_query(
         &mut self,
         rx: Receiver<Self::Response>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<Result<Vec<Value>>>>> + Send + Sync + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<QueryResponse>> + Send + Sync + '_>> {
         Box::pin(async move {
             let result = rx.into_recv_async().await.unwrap();
             match result.unwrap() {

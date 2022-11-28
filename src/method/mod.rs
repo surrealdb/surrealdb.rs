@@ -507,10 +507,9 @@ where
     ///     .bind("tb", "person")
     ///     .await?;
     /// // Get the first result from the first query
-    /// let created = result.remove(0)?.remove(0);
-    /// let person: Person = from_value(&created)?;
+    /// let created: Option<Person> = result.get(0, 0)?;
     /// // Get all of the results from the second query
-    /// let people = result.remove(1)?;
+    /// let people: Vec<Person> = result.get(1, ..)?.unwrap_or_default();
     /// # Ok(())
     /// # }
     /// ```

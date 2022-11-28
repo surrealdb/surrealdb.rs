@@ -1,5 +1,6 @@
 use super::types::Credentials;
 use super::types::User;
+use crate::method::query_response::QueryResponse;
 use crate::method::Method;
 use crate::param::from_json;
 use crate::param::from_value;
@@ -67,7 +68,7 @@ pub(super) fn mock(route_rx: Receiver<Option<Route<(Method, Param), Result<DbRes
                     _ => unreachable!(),
                 },
                 Method::Query => match &params[..] {
-                    [_] | [_, _] => Ok(DbResponse::Query(Vec::new())),
+                    [_] | [_, _] => Ok(DbResponse::Query(QueryResponse::new())),
                     _ => unreachable!(),
                 },
                 Method::Create => match &params[..] {
