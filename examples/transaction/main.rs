@@ -33,8 +33,7 @@ async fn main() -> surrealdb_rs::Result<()> {
         .await?;
 
     for result in results {
-        let response = result?;
-        tracing::info!("{response:?}");
+        tracing::info!("{result:?}");
     }
 
     Ok(())

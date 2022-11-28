@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use surrealdb_rs::param::from_value;
 use surrealdb_rs::param::Root;
 use surrealdb_rs::protocol::Ws;
 use surrealdb_rs::Surreal;
@@ -27,15 +26,21 @@ async fn main() -> surrealdb_rs::Result<()> {
 
     client.use_ns("namespace").use_db("database").await?;
 
-    let mut results = client
+    let results = client
         .query("CREATE user SET name = $name, company = $company")
         .bind("name", "John Doe")
         .bind("company", "ACME Corporation")
         .await?;
 
-    let value = results.remove(0)?.remove(0);
-    let user: User = from_value(&value)?;
+    // print the created user:
+    let user: Option<User> = results.get(0, 0)?;
     tracing::info!("{user:?}");
+
+    let response = client.query("SELECT * FROM user").await?;
+
+    // print all users:
+    let users: Vec<User> = response.get(0, ..)?.unwrap_or_default();
+    tracing::info!("{users:?}");
 
     Ok(())
 }
