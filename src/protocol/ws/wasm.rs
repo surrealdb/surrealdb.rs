@@ -11,7 +11,7 @@ use crate::protocol::ws::PING_METHOD;
 use crate::Connection;
 use crate::ErrorKind;
 use crate::Method;
-use crate::Response as QueryResponse;
+use crate::QueryResponse;
 use crate::Result;
 use crate::Route;
 use crate::Router;

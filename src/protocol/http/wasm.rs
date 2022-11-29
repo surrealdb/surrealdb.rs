@@ -6,7 +6,7 @@ use crate::param::Param;
 use crate::param::ServerAddrs;
 use crate::Connection;
 use crate::Method;
-use crate::Response as QueryResponse;
+use crate::QueryResponse;
 use crate::Result;
 use crate::Route;
 use crate::Router;
