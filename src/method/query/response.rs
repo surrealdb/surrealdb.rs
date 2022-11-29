@@ -211,15 +211,20 @@ impl QueryResult {
         self.get(..)
     }
 
-    /// Returns a reference the inner [`Result`](crate::Result) with the raw
-    /// unparsed [Value]s
-    pub fn inner(&self) -> &Result<Vec<Value>> {
-        &self.0
+    /// Unwrap into the inner result and possible list of raw unparsed values
+    pub fn into_inner(self) -> Result<Vec<Value>> {
+        self.0
     }
 }
 
 impl Into<QueryResult> for Result<Vec<Value>> {
     fn into(self) -> QueryResult {
         QueryResult(self)
+    }
+}
+
+impl AsRef<Result<Vec<Value>>> for QueryResult {
+    fn as_ref(&self) -> &Result<Vec<Value>> {
+        &self.0
     }
 }
