@@ -33,7 +33,7 @@ impl QueryResponse {
 
     /// Returns a reference the result for the `n`-th query from the response. If
     /// no result is found at this index then [None] is returned.
-    pub fn get_query(&self, n: usize) -> Option<&QueryResult> {
+    pub fn query_result(&self, n: usize) -> Option<&QueryResult> {
         self.0.get(n)
     }
 
@@ -79,7 +79,7 @@ impl QueryResponse {
         I: SliceIndex<[Value]>,
         <I as SliceIndex<[surrealdb::sql::Value]>>::Output: Serialize,
     {
-        self.get_query(query_index)
+        self.query_result(query_index)
             .and_then(|query_result| query_result.get(index_or_range).transpose())
             .transpose()
     }
@@ -173,7 +173,7 @@ impl QueryResult {
     /// # let token = String::new();
     /// let response = client.query("select * from account where balance = '$100'").await?;
     ///
-    /// if let Some(first_query_result) = response.get_query(0) {
+    /// if let Some(first_query_result) = response.query_result(0) {
     ///   // print the first account:
     ///   let account: Option<Account> = first_query_result.get(0)?;
     ///   dbg!(account);
