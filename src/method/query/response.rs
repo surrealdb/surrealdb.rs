@@ -21,7 +21,8 @@ pub struct QueryResponse(Vec<QueryResult>);
 
 impl QueryResponse {
     /// Constructs an empty [`QueryResponse`]
-    pub fn new() -> Self {
+    #[allow(unused)]
+    pub(crate) fn new() -> Self {
         Self(Default::default())
     }
 
