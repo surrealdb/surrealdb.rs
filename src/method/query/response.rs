@@ -45,7 +45,7 @@ impl QueryResponse {
     /// is returned.
     /// - if `index_or_range` is a range then a [`Vec<T>`] is returned if
     /// and only if the full range is found inside the inner list.
-    /// 
+    ///
     /// In cases of out of bounds indices in either the query or the items then
     /// [`T::default()`] is returned. This means that if [<T>] were to be an
     /// Option it will return `None` and if it were to be a Vec then an empty
@@ -86,7 +86,7 @@ impl QueryResponse {
     {
         match self.query_result(query_index) {
             None => Ok(T::default()),
-            Some(query_result) => query_result.get(index_or_range)
+            Some(query_result) => query_result.get(index_or_range),
         }
     }
 }
@@ -166,7 +166,7 @@ impl QueryResult {
     /// [`T::default()`] is returned. This means that if [`<T>`] were to be an
     /// Option it will return `None` and if it were to be a Vec then an empty
     /// list will be returned.
-    /// 
+    ///
     /// # Examples
     /// ```no_run
     /// # #[derive(Debug, serde::Deserialize)]

@@ -3,6 +3,8 @@ mod native;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
+use crate::method::query_response::QueryResponse;
+use crate::method::query_response::QueryResult;
 use crate::param::from_json;
 use crate::param::from_value;
 use crate::param::DbResponse;
@@ -79,7 +81,7 @@ impl Authenticate for RequestBuilder {
 }
 
 #[derive(Debug, Deserialize)]
-struct QueryResponse {
+struct HttpQueryResponse {
     status: Status,
     result: Option<serde_json::Value>,
     detail: Option<String>,
@@ -104,37 +106,38 @@ async fn submit_auth(request: RequestBuilder) -> Result<Value> {
     Ok(response.token.filter(|token| token != "NONE").into())
 }
 
-async fn query(request: RequestBuilder) -> Result<Vec<Result<Vec<Value>>>> {
+async fn query(request: RequestBuilder) -> Result<QueryResponse> {
     tracing::info!("{request:?}");
     let response = request.send().await?.error_for_status()?;
     let text = response.text().await?;
     tracing::info!("Response {text}");
-    let responses: Vec<QueryResponse> = serde_json::from_str(&text)?;
-    let mut vec = Vec::with_capacity(responses.len());
+    let responses: Vec<HttpQueryResponse> = serde_json::from_str(&text)?;
+    let mut vec: Vec<QueryResult> = Vec::with_capacity(responses.len());
     for response in responses {
         match response.status {
             Status::Ok => {
                 if let Some(value) = response.result {
                     match from_json(value) {
-                        Value::Array(Array(array)) => vec.push(Ok(array)),
-                        Value::None | Value::Null => vec.push(Ok(vec![])),
-                        value => vec.push(Ok(vec![value])),
+                        Value::Array(Array(array)) => vec.push(Ok(array).into()),
+                        Value::None | Value::Null => vec.push(Ok(vec![]).into()),
+                        value => vec.push(Ok(vec![value]).into()),
                     }
                 }
             }
             Status::Err => {
                 if let Some(error) = response.detail {
-                    vec.push(Err(ErrorKind::Query.with_context(error)));
+                    vec.push(Err(ErrorKind::Query.with_context(error)).into());
                 }
             }
         }
     }
-    Ok(vec)
+
+    Ok(vec.into())
 }
 
 async fn take(one: bool, request: RequestBuilder) -> Result<Value> {
-    if let Some(result) = query(request).await?.pop() {
-        let mut vec = result?;
+    if let Some(result) = query(request).await?.into_inner().pop() {
+        let mut vec = result.into_inner()?;
         match vec.pop() {
             Some(Value::Array(Array(mut vec))) => {
                 if one {
