@@ -68,20 +68,21 @@ impl QueryResponse {
     /// tracing::info!("{user:?}");
     ///
     /// // get all items from the first query
-    /// let users: Vec<User> = response.get(0, ..)?.unwrap_or_default();
+    /// let users: Vec<User> = response.get(0, ..)?;
     /// tracing::info!("{users:?}");
     /// # Ok(())
     /// # }
     /// ```
-    pub fn get<T, I>(&self, query_index: usize, index_or_range: I) -> Result<Option<T>>
+    pub fn get<T, I>(&self, query_index: usize, index_or_range: I) -> Result<T>
     where
-        T: DeserializeOwned,
+        T: DeserializeOwned + Default,
         I: SliceIndex<[Value]>,
         <I as SliceIndex<[surrealdb::sql::Value]>>::Output: Serialize,
     {
-        self.query_result(query_index)
-            .and_then(|query_result| query_result.get(index_or_range).transpose())
-            .transpose()
+        match self.query_result(query_index) {
+            None => Ok(T::default()),
+            Some(query_result) => query_result.get(index_or_range)
+        }
     }
 }
 
@@ -185,9 +186,9 @@ impl QueryResult {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn get<T, I>(&self, index_or_range: I) -> Result<Option<T>>
+    pub fn get<T, I>(&self, index_or_range: I) -> Result<T>
     where
-        T: DeserializeOwned,
+        T: DeserializeOwned + Default,
         I: SliceIndex<[Value]>,
         <I as SliceIndex<[surrealdb::sql::Value]>>::Output: Serialize,
     {
@@ -198,7 +199,7 @@ impl QueryResult {
             None => None,
         };
 
-        Ok(items)
+        Ok(items.unwrap_or_default())
     }
 
     /// Returns the deserialized [`Vec<T>`] from the inner [Value]s, if no values
@@ -207,7 +208,7 @@ impl QueryResult {
     where
         T: DeserializeOwned,
     {
-        Ok(self.get(..)?.unwrap_or_default())
+        self.get(..)
     }
 
     /// Returns a reference the inner [`Result`](crate::Result) with the raw

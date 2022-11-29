@@ -39,7 +39,7 @@ async fn main() -> surrealdb_rs::Result<()> {
     let response = client.query("SELECT * FROM user").await?;
 
     // print all users:
-    let users: Vec<User> = response.get(0, ..)?.unwrap_or_default();
+    let users: Vec<User> = response.get(0, ..)?;
     tracing::info!("{users:?}");
 
     Ok(())

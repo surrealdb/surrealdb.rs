@@ -509,7 +509,7 @@ where
     /// // Get the first result from the first query
     /// let created: Option<Person> = result.get(0, 0)?;
     /// // Get all of the results from the second query
-    /// let people: Vec<Person> = result.get(1, ..)?.unwrap_or_default();
+    /// let people: Vec<Person> = result.get(1, ..)?;
     /// # Ok(())
     /// # }
     /// ```
