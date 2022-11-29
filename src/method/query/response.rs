@@ -36,15 +36,6 @@ impl QueryResponse {
         self.0.get(n)
     }
 
-    /// Returns a reference to the result for the `n`-th query from the response.
-    ///
-    /// # Panics
-    /// Unlike the [`Self::get()`] function no bounding check is performed and may panic if
-    /// `n` is out of bounds.
-    pub fn get_query_unchecked(&self, n: usize) -> &QueryResult {
-        &self.0[n]
-    }
-
     /// Returns the deserialized [`<T>`] from the inner [Value]s over the given
     /// range or index for the query at `query_index`.
     ///
