@@ -41,10 +41,15 @@ impl QueryResponse {
     /// range or index for the query at `query_index`.
     ///
     /// - If no query is found at `query_index` then [`None`] is returned.
-    /// - if `index_or_range` is an index of type [usize] then a single [`Option<T>`]
+    /// - if `index_or_range` is an index of type [usize] then a single [`T`]
     /// is returned.
-    /// - if `index_or_range` is a range then a [`Option<Vec<T>>`] is returned if
+    /// - if `index_or_range` is a range then a [`Vec<T>`] is returned if
     /// and only if the full range is found inside the inner list.
+    /// 
+    /// In cases of out of bounds indices in either the query or the items then
+    /// [`T::default()`] is returned. This means that if [<T>] were to be an
+    /// Option it will return `None` and if it were to be a Vec then an empty
+    /// list will be returned.
     ///
     /// # Examples
     /// ```no_run
@@ -152,11 +157,16 @@ impl QueryResult {
     /// Returns the deserialized [`<T>`] from the inner [Value]s over the given
     /// range or index.
     ///
-    /// - if `index_or_range` is an index of type [usize] then a single [`Option<T>`]
+    /// - if `index_or_range` is an index of type [usize] then a single [`<T>`]
     /// is returned.
-    /// - if `index_or_range` is a range then a [`Option<Vec<T>>`] is returned if
+    /// - if `index_or_range` is a range then a [`Vec<T>`] is returned if
     /// and only if the full range is found inside the inner list.
     ///
+    /// In cases of out of bounds indices in either the query or the items then
+    /// [`T::default()`] is returned. This means that if [`<T>`] were to be an
+    /// Option it will return `None` and if it were to be a Vec then an empty
+    /// list will be returned.
+    /// 
     /// # Examples
     /// ```no_run
     /// # #[derive(Debug, serde::Deserialize)]
