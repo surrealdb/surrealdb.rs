@@ -6,6 +6,7 @@ use std::slice::SliceIndex;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
+use crate::param::from_serializable;
 use crate::Result;
 use crate::Value;
 
@@ -199,15 +200,9 @@ impl QueryResult {
         <I as SliceIndex<[surrealdb::sql::Value]>>::Output: Serialize,
     {
         let values: &Vec<Value> = self.0.as_ref().map_err(|error| error.clone())?.as_ref();
-
         let some_slice = values.get::<I>(index_or_range);
         let items = match some_slice {
-            Some(slice) => {
-                let bytes = serde_pack::to_vec(slice)?;
-                let response = serde_pack::from_slice(&bytes)?;
-
-                Some(response)
-            }
+            Some(slice) => Some(from_serializable(slice)?),
             None => None,
         };
 
