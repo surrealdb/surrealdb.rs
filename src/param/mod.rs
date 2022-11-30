@@ -6,6 +6,7 @@ mod query;
 mod resource;
 mod server_addrs;
 
+use crate::method::query_response::QueryResponse;
 use crate::Result;
 use dmp::Diff;
 use serde::de::DeserializeOwned;
@@ -161,19 +162,30 @@ impl Param {
 #[derive(Debug)]
 pub enum DbResponse {
     /// The response sent for the `query` method
-    Query(Vec<Result<Vec<sql::Value>>>),
+    Query(QueryResponse),
     /// The response sent for any method except `query`
     Other(sql::Value),
 }
 
-/// Deserializes a value `T` from `SurrealDB` `Value`
+/// Internal function that accepts anything serializable, be it a value, a slice,
+/// or a string; and deserializes it into the deduced `<T>`
+pub(crate) fn from_serializable<S, T>(thing: &S) -> Result<T>
+where
+    T: DeserializeOwned,
+    S: Serialize + ?Sized,
+{
+    let bytes = serde_pack::to_vec(&thing)?;
+    let response = serde_pack::from_slice(&bytes)?;
+
+    Ok(response)
+}
+
+/// Deserializes a value `T` from `SurrealDB` [`Value`]
 pub fn from_value<T>(value: &sql::Value) -> Result<T>
 where
     T: DeserializeOwned,
 {
-    let bytes = serde_pack::to_vec(&value)?;
-    let response = serde_pack::from_slice(&bytes)?;
-    Ok(response)
+    from_serializable(value)
 }
 
 pub(crate) fn from_json(json: JsonValue) -> sql::Value {

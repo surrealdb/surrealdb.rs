@@ -24,13 +24,17 @@ async fn main() -> surrealdb_rs::Result<()> {
     for idx in 0..NUM {
         let sender = tx.clone();
         tokio::spawn(async move {
-            let mut result = CLIENT
+            let result = CLIENT
                 .query("SELECT * FROM $idx")
                 .bind("idx", idx)
                 .await
                 .unwrap();
-            let db_idx = result.remove(0).unwrap().remove(0);
-            tracing::info!("{idx}: {db_idx}");
+
+            let db_idx: Option<usize> = result.get(0, 0).unwrap();
+            if let Some(db_idx) = db_idx {
+                tracing::info!("{idx}: {db_idx}");
+            }
+
             drop(sender);
         });
     }

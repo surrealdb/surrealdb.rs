@@ -56,6 +56,7 @@ pub use kill::Kill;
 pub use live::Live;
 pub use merge::Merge;
 pub use patch::Patch;
+pub use query::response as query_response;
 pub use query::Query;
 pub use select::Select;
 pub use set::Set;
@@ -506,10 +507,9 @@ where
     ///     .bind("tb", "person")
     ///     .await?;
     /// // Get the first result from the first query
-    /// let created = result.remove(0)?.remove(0);
-    /// let person: Person = from_value(&created)?;
+    /// let created: Option<Person> = result.get(0, 0)?;
     /// // Get all of the results from the second query
-    /// let people = result.remove(1)?;
+    /// let people: Vec<Person> = result.get(1, ..)?;
     /// # Ok(())
     /// # }
     /// ```

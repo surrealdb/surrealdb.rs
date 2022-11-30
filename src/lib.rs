@@ -107,6 +107,7 @@ pub mod protocol;
 
 pub use err::Error;
 pub use err::ErrorKind;
+use method::query_response::QueryResponse;
 
 use crate::param::ServerAddrs;
 use crate::param::ToServerAddrs;
@@ -131,9 +132,6 @@ use surrealdb::sql::Value;
 
 /// Result type returned by the client
 pub type Result<T> = std::result::Result<T, Error>;
-
-/// Response type returned by the `query` method
-pub type Response = Vec<Result<Vec<Value>>>;
 
 const SUPPORTED_VERSIONS: (&str, &str) = (">=1.0.0-beta.8, <2.0.0", "20221030.c12a1cc");
 
@@ -173,7 +171,7 @@ pub trait Connection: Sized + Send + Sync + 'static {
     fn recv_query(
         &mut self,
         receiver: Receiver<Self::Response>,
-    ) -> Pin<Box<dyn Future<Output = Result<Response>> + Send + Sync + '_>>;
+    ) -> Pin<Box<dyn Future<Output = Result<QueryResponse>> + Send + Sync + '_>>;
 
     /// Execute all methods except `query`
     fn execute<'r, R>(
@@ -195,7 +193,7 @@ pub trait Connection: Sized + Send + Sync + 'static {
         &'r mut self,
         router: &'r Router<Self>,
         param: param::Param,
-    ) -> Pin<Box<dyn Future<Output = Result<Response>> + Send + Sync + 'r>> {
+    ) -> Pin<Box<dyn Future<Output = Result<QueryResponse>> + Send + Sync + 'r>> {
         Box::pin(async move {
             let rx = self.send(router, param).await?;
             self.recv_query(rx).await

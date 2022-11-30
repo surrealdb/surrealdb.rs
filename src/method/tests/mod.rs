@@ -11,7 +11,6 @@ use crate::param::NameSpace;
 use crate::param::PatchOp;
 use crate::param::Root;
 use crate::param::Scope;
-use crate::Result;
 use crate::StaticClient;
 use crate::Surreal;
 use protocol::Client;
@@ -20,10 +19,11 @@ use semver::Version;
 use std::ops::Bound;
 use surrealdb::sql::statements::BeginStatement;
 use surrealdb::sql::statements::CommitStatement;
-use surrealdb::sql::Value;
 use types::AuthParams;
 use types::User;
 use types::USER;
+
+use super::query_response::QueryResponse;
 
 static CLIENT: Surreal<Client> = Surreal::new();
 
@@ -91,13 +91,13 @@ async fn api() {
     let _: () = CLIENT.authenticate(Jwt(String::new())).await.unwrap();
 
     // query
-    let _: Vec<Result<Vec<Value>>> = CLIENT.query("SELECT * FROM user").await.unwrap();
-    let _: Vec<Result<Vec<Value>>> = CLIENT
+    let _: QueryResponse = CLIENT.query("SELECT * FROM user").await.unwrap();
+    let _: QueryResponse = CLIENT
         .query("CREATE user:john SET name = $name")
         .bind("name", "John Doe")
         .await
         .unwrap();
-    let _: Vec<Result<Vec<Value>>> = CLIENT
+    let _: QueryResponse = CLIENT
         .query(BeginStatement)
         .query("CREATE account:one SET balance = 135605.16")
         .query("CREATE account:two SET balance = 91031.31")

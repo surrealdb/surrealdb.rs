@@ -3,7 +3,6 @@ use crate::param;
 use crate::param::from_json;
 use crate::param::Param;
 use crate::Connection;
-use crate::Response;
 use crate::Result;
 use crate::Router;
 use serde::Serialize;
@@ -17,19 +16,21 @@ use surrealdb::sql::Statement;
 use surrealdb::sql::Statements;
 use surrealdb::sql::Value;
 
+use super::response::QueryResponse;
+
 /// A query future
 #[derive(Debug)]
 pub struct Query<'r, C: Connection> {
-    pub(super) router: Result<&'r Router<C>>,
-    pub(super) query: Vec<Result<Vec<Statement>>>,
-    pub(super) bindings: BTreeMap<String, Value>,
+    pub(in super::super) router: Result<&'r Router<C>>,
+    pub(in super::super) query: Vec<Result<Vec<Statement>>>,
+    pub(in super::super) bindings: BTreeMap<String, Value>,
 }
 
 impl<'r, Client> IntoFuture for Query<'r, Client>
 where
     Client: Connection,
 {
-    type Output = Result<Response>;
+    type Output = Result<QueryResponse>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
 
     fn into_future(self) -> Self::IntoFuture {
