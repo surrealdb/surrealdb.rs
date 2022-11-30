@@ -250,8 +250,15 @@ async fn query_binds() {
 	client.use_ns(NS).use_db(DB).await.unwrap();
 	client
 		.query("CREATE type::thing($table, john) SET name = $name")
-		.bind("table", user)
-		.bind("name", "John Doe")
+		.bind(("table", user))
+		.bind(("name", "John Doe"))
+		.await
+		.unwrap();
+	client
+		.query("CREATE user SET name = $name")
+		.bind(Record {
+			name: "John Doe",
+		})
 		.await
 		.unwrap();
 }
@@ -268,7 +275,7 @@ async fn query_chaining() {
 		.query("UPDATE type::thing($table, one) SET balance += 300.00")
 		.query("UPDATE type::thing($table, two) SET balance -= 300.00")
 		.query(CommitStatement)
-		.bind("table", account)
+		.bind(("table", account))
 		.await
 		.unwrap();
 }

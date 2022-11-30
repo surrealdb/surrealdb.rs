@@ -21,7 +21,7 @@ async fn main() -> surrealdb_rs::Result<()> {
 	for idx in 0..NUM {
 		let sender = tx.clone();
 		tokio::spawn(async move {
-			let result = CLIENT.query("SELECT * FROM $idx").bind("idx", idx).await.unwrap();
+			let result = CLIENT.query("SELECT * FROM $idx").bind(("idx", idx)).await.unwrap();
 
 			let db_idx: Option<usize> = result.get(0, 0).unwrap();
 			if let Some(db_idx) = db_idx {

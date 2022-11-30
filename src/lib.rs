@@ -83,7 +83,7 @@
 //!     // Perform a custom advanced query
 //!     let groups = client
 //!         .query("SELECT marketing, count() FROM type::table($tb) GROUP BY marketing")
-//!         .bind("tb", "person")
+//!         .bind(("tb", "person"))
 //!         .await?;
 //!
 //!     Ok(())

@@ -506,7 +506,7 @@ where
 	/// let mut result = client
 	///     .query("CREATE person")
 	///     .query("SELECT * FROM type::table($tb)")
-	///     .bind("tb", "person")
+	///     .bind(("tb", "person"))
 	///     .await?;
 	/// // Get the first result from the first query
 	/// let created: Option<Person> = result.get(0, 0)?;
@@ -519,7 +519,7 @@ where
 		Query {
 			router: self.router.extract(),
 			query: vec![query.try_into_query()],
-			bindings: Default::default(),
+			bindings: Ok(Default::default()),
 		}
 	}
 

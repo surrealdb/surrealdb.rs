@@ -23,6 +23,8 @@ pub enum ErrorKind {
 	Socket,
 	/// Syntax unsupported
 	SyntaxUnsupported,
+	/// Invalid query bindings
+	InvalidBindings,
 	/// Invalid request
 	InvalidRequest,
 	/// Invalid params
@@ -54,6 +56,7 @@ impl ErrorKind {
 			ErrorKind::RangeUnsupported => format!("range not supported for {context}"),
 			ErrorKind::Socket => format!("socket error; {context}"),
 			ErrorKind::SyntaxUnsupported => format!("{context} syntax is not supported"),
+			ErrorKind::InvalidBindings => format!("invalid query bindings; {context}"),
 			_ => context.to_string(),
 		};
 		Error {

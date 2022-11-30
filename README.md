@@ -130,7 +130,7 @@ async fn main() -> Result<()> {
             FROM type::table($table)
             GROUP BY marketing
         ")
-        .bind("table", "person")
+        .bind(("table", "person"))
         .await?;
 
     dbg!(groups);
