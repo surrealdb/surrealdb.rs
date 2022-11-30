@@ -29,181 +29,147 @@ static CLIENT: Surreal<Client> = Surreal::new();
 
 #[tokio::test]
 async fn api() {
-    // connect to the mock server
-    CLIENT.connect::<Test>(()).with_capacity(512).await.unwrap();
+	// connect to the mock server
+	CLIENT.connect::<Test>(()).with_capacity(512).await.unwrap();
 
-    // health
-    let _: () = CLIENT.health().await.unwrap();
+	// health
+	let _: () = CLIENT.health().await.unwrap();
 
-    // invalidate
-    let _: () = CLIENT.invalidate().await.unwrap();
+	// invalidate
+	let _: () = CLIENT.invalidate().await.unwrap();
 
-    // use
-    let _: () = CLIENT.use_ns("test-ns").use_db("test-db").await.unwrap();
+	// use
+	let _: () = CLIENT.use_ns("test-ns").use_db("test-db").await.unwrap();
 
-    // signup
-    let _: Jwt = CLIENT
-        .signup(Scope {
-            namespace: "test-ns",
-            database: "test-db",
-            scope: "scope",
-            params: AuthParams {},
-        })
-        .await
-        .unwrap();
+	// signup
+	let _: Jwt = CLIENT
+		.signup(Scope {
+			namespace: "test-ns",
+			database: "test-db",
+			scope: "scope",
+			params: AuthParams {},
+		})
+		.await
+		.unwrap();
 
-    // signin
-    let _: () = CLIENT
-        .signin(Root {
-            username: "root",
-            password: "root",
-        })
-        .await
-        .unwrap();
-    let _: Jwt = CLIENT
-        .signin(NameSpace {
-            namespace: "test-ns",
-            username: "user",
-            password: "pass",
-        })
-        .await
-        .unwrap();
-    let _: Jwt = CLIENT
-        .signin(Database {
-            namespace: "test-ns",
-            database: "test-db",
-            username: "user",
-            password: "pass",
-        })
-        .await
-        .unwrap();
-    let _: Jwt = CLIENT
-        .signin(Scope {
-            namespace: "test-ns",
-            database: "test-db",
-            scope: "scope",
-            params: AuthParams {},
-        })
-        .await
-        .unwrap();
+	// signin
+	let _: () = CLIENT
+		.signin(Root {
+			username: "root",
+			password: "root",
+		})
+		.await
+		.unwrap();
+	let _: Jwt = CLIENT
+		.signin(NameSpace {
+			namespace: "test-ns",
+			username: "user",
+			password: "pass",
+		})
+		.await
+		.unwrap();
+	let _: Jwt = CLIENT
+		.signin(Database {
+			namespace: "test-ns",
+			database: "test-db",
+			username: "user",
+			password: "pass",
+		})
+		.await
+		.unwrap();
+	let _: Jwt = CLIENT
+		.signin(Scope {
+			namespace: "test-ns",
+			database: "test-db",
+			scope: "scope",
+			params: AuthParams {},
+		})
+		.await
+		.unwrap();
 
-    // authenticate
-    let _: () = CLIENT.authenticate(Jwt(String::new())).await.unwrap();
+	// authenticate
+	let _: () = CLIENT.authenticate(Jwt(String::new())).await.unwrap();
 
-    // query
-    let _: QueryResponse = CLIENT.query("SELECT * FROM user").await.unwrap();
-    let _: QueryResponse = CLIENT
-        .query("CREATE user:john SET name = $name")
-        .bind("name", "John Doe")
-        .await
-        .unwrap();
-    let _: QueryResponse = CLIENT
-        .query(BeginStatement)
-        .query("CREATE account:one SET balance = 135605.16")
-        .query("CREATE account:two SET balance = 91031.31")
-        .query("UPDATE account:one SET balance += 300.00")
-        .query("UPDATE account:two SET balance -= 300.00")
-        .query(CommitStatement)
-        .await
-        .unwrap();
+	// query
+	let _: QueryResponse = CLIENT.query("SELECT * FROM user").await.unwrap();
+	let _: QueryResponse =
+		CLIENT.query("CREATE user:john SET name = $name").bind("name", "John Doe").await.unwrap();
+	let _: QueryResponse = CLIENT
+		.query(BeginStatement)
+		.query("CREATE account:one SET balance = 135605.16")
+		.query("CREATE account:two SET balance = 91031.31")
+		.query("UPDATE account:one SET balance += 300.00")
+		.query("UPDATE account:two SET balance -= 300.00")
+		.query(CommitStatement)
+		.await
+		.unwrap();
 
-    // create
-    let _: User = CLIENT.create(USER).await.unwrap();
-    let _: User = CLIENT.create((USER, "john")).await.unwrap();
-    let _: User = CLIENT.create(USER).content(User::default()).await.unwrap();
-    let _: User = CLIENT
-        .create((USER, "john"))
-        .content(User::default())
-        .await
-        .unwrap();
+	// create
+	let _: User = CLIENT.create(USER).await.unwrap();
+	let _: User = CLIENT.create((USER, "john")).await.unwrap();
+	let _: User = CLIENT.create(USER).content(User::default()).await.unwrap();
+	let _: User = CLIENT.create((USER, "john")).content(User::default()).await.unwrap();
 
-    // select
-    let _: Vec<User> = CLIENT.select(USER).await.unwrap();
-    let _: Option<User> = CLIENT.select((USER, "john")).await.unwrap();
-    let _: Vec<User> = CLIENT.select(USER).range(..).await.unwrap();
-    let _: Vec<User> = CLIENT.select(USER).range(.."john").await.unwrap();
-    let _: Vec<User> = CLIENT.select(USER).range(..="john").await.unwrap();
-    let _: Vec<User> = CLIENT.select(USER).range("jane"..).await.unwrap();
-    let _: Vec<User> = CLIENT.select(USER).range("jane".."john").await.unwrap();
-    let _: Vec<User> = CLIENT.select(USER).range("jane"..="john").await.unwrap();
-    let _: Vec<User> = CLIENT.select(USER).range("jane"..="john").await.unwrap();
-    let _: Vec<User> = CLIENT
-        .select(USER)
-        .range((Bound::Excluded("jane"), Bound::Included("john")))
-        .await
-        .unwrap();
+	// select
+	let _: Vec<User> = CLIENT.select(USER).await.unwrap();
+	let _: Option<User> = CLIENT.select((USER, "john")).await.unwrap();
+	let _: Vec<User> = CLIENT.select(USER).range(..).await.unwrap();
+	let _: Vec<User> = CLIENT.select(USER).range(.."john").await.unwrap();
+	let _: Vec<User> = CLIENT.select(USER).range(..="john").await.unwrap();
+	let _: Vec<User> = CLIENT.select(USER).range("jane"..).await.unwrap();
+	let _: Vec<User> = CLIENT.select(USER).range("jane".."john").await.unwrap();
+	let _: Vec<User> = CLIENT.select(USER).range("jane"..="john").await.unwrap();
+	let _: Vec<User> = CLIENT.select(USER).range("jane"..="john").await.unwrap();
+	let _: Vec<User> = CLIENT
+		.select(USER)
+		.range((Bound::Excluded("jane"), Bound::Included("john")))
+		.await
+		.unwrap();
 
-    // update
-    let _: Vec<User> = CLIENT.update(USER).await.unwrap();
-    let _: Option<User> = CLIENT.update((USER, "john")).await.unwrap();
-    let _: Vec<User> = CLIENT.update(USER).content(User::default()).await.unwrap();
-    let _: Vec<User> = CLIENT
-        .update(USER)
-        .range("jane".."john")
-        .content(User::default())
-        .await
-        .unwrap();
-    let _: Option<User> = CLIENT
-        .update((USER, "john"))
-        .content(User::default())
-        .await
-        .unwrap();
+	// update
+	let _: Vec<User> = CLIENT.update(USER).await.unwrap();
+	let _: Option<User> = CLIENT.update((USER, "john")).await.unwrap();
+	let _: Vec<User> = CLIENT.update(USER).content(User::default()).await.unwrap();
+	let _: Vec<User> =
+		CLIENT.update(USER).range("jane".."john").content(User::default()).await.unwrap();
+	let _: Option<User> = CLIENT.update((USER, "john")).content(User::default()).await.unwrap();
 
-    // merge
-    let _: Vec<User> = CLIENT.update(USER).merge(User::default()).await.unwrap();
-    let _: Vec<User> = CLIENT
-        .update(USER)
-        .range("jane".."john")
-        .merge(User::default())
-        .await
-        .unwrap();
-    let _: Option<User> = CLIENT
-        .update((USER, "john"))
-        .merge(User::default())
-        .await
-        .unwrap();
+	// merge
+	let _: Vec<User> = CLIENT.update(USER).merge(User::default()).await.unwrap();
+	let _: Vec<User> =
+		CLIENT.update(USER).range("jane".."john").merge(User::default()).await.unwrap();
+	let _: Option<User> = CLIENT.update((USER, "john")).merge(User::default()).await.unwrap();
 
-    // patch
-    let _: Vec<User> = CLIENT
-        .update(USER)
-        .patch(PatchOp::remove("/name"))
-        .await
-        .unwrap();
-    let _: Vec<User> = CLIENT
-        .update(USER)
-        .range("jane".."john")
-        .patch(PatchOp::remove("/name"))
-        .await
-        .unwrap();
-    let _: Option<User> = CLIENT
-        .update((USER, "john"))
-        .patch(PatchOp::remove("/name"))
-        .await
-        .unwrap();
+	// patch
+	let _: Vec<User> = CLIENT.update(USER).patch(PatchOp::remove("/name")).await.unwrap();
+	let _: Vec<User> =
+		CLIENT.update(USER).range("jane".."john").patch(PatchOp::remove("/name")).await.unwrap();
+	let _: Option<User> =
+		CLIENT.update((USER, "john")).patch(PatchOp::remove("/name")).await.unwrap();
 
-    // delete
-    let _: () = CLIENT.delete(USER).await.unwrap();
-    let _: () = CLIENT.delete((USER, "john")).await.unwrap();
-    let _: () = CLIENT.delete(USER).range("jane".."john").await.unwrap();
+	// delete
+	let _: () = CLIENT.delete(USER).await.unwrap();
+	let _: () = CLIENT.delete((USER, "john")).await.unwrap();
+	let _: () = CLIENT.delete(USER).range("jane".."john").await.unwrap();
 
-    // version
-    let _: Version = CLIENT.version().await.unwrap();
+	// version
+	let _: Version = CLIENT.version().await.unwrap();
 }
 
 fn send_and_sync(_: impl Send + Sync) {}
 
 #[test]
 fn futures_are_send_and_sync() {
-    send_and_sync(async {
-        let client = Surreal::connect::<Test>(()).await.unwrap();
-        client.use_ns("test-ns").use_db("test-db").await.unwrap();
-        client
-            .signin(Root {
-                username: "root",
-                password: "root",
-            })
-            .await
-            .unwrap();
-        let _: Vec<User> = client.select(USER).await.unwrap();
-    });
+	send_and_sync(async {
+		let client = Surreal::connect::<Test>(()).await.unwrap();
+		client.use_ns("test-ns").use_db("test-db").await.unwrap();
+		client
+			.signin(Root {
+				username: "root",
+				password: "root",
+			})
+			.await
+			.unwrap();
+		let _: Vec<User> = client.select(USER).await.unwrap();
+	});
 }

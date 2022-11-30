@@ -5,33 +5,33 @@ pub const USER: &str = "user";
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct User {
-    pub id: String,
-    pub name: String,
+	pub id: String,
+	pub name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Credentials {
-    Database {
-        ns: String,
-        db: String,
-        user: String,
-        pass: String,
-    },
-    NameSpace {
-        ns: String,
-        user: String,
-        pass: String,
-    },
-    Root {
-        user: String,
-        pass: String,
-    },
-    Scope {
-        ns: String,
-        db: String,
-        sc: String,
-    },
+	Database {
+		ns: String,
+		db: String,
+		user: String,
+		pass: String,
+	},
+	NameSpace {
+		ns: String,
+		user: String,
+		pass: String,
+	},
+	Root {
+		user: String,
+		pass: String,
+	},
+	Scope {
+		ns: String,
+		db: String,
+		sc: String,
+	},
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -34,6 +34,6 @@ pub struct Wss;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub(crate) enum Status {
-    Ok,
-    Err,
+	Ok,
+	Err,
 }
