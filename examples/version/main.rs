@@ -3,13 +3,13 @@ use surrealdb_rs::Surreal;
 
 #[tokio::main]
 async fn main() -> surrealdb_rs::Result<()> {
-    tracing_subscriber::fmt::init();
+	tracing_subscriber::fmt::init();
 
-    let client = Surreal::connect::<Ws>("localhost:8000").await?;
+	let client = Surreal::connect::<Ws>("localhost:8000").await?;
 
-    let version = client.version().await?;
+	let version = client.version().await?;
 
-    tracing::info!("{version:?}");
+	tracing::info!("{version:?}");
 
-    Ok(())
+	Ok(())
 }

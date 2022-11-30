@@ -11,16 +11,16 @@ pub const DB_ENDPOINT: &str = "localhost:8000";
 
 #[derive(Debug, Serialize)]
 pub struct Record<'a> {
-    pub name: &'a str,
+	pub name: &'a str,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct RecordId {
-    pub id: String,
+	pub id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthParams<'a> {
-    pub email: &'a str,
-    pub pass: &'a str,
+	pub email: &'a str,
+	pub pass: &'a str,
 }

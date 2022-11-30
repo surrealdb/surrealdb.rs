@@ -11,22 +11,21 @@ use surrealdb::sql::Uuid;
 /// A live query future
 #[derive(Debug)]
 pub struct Live<'r, C: Connection> {
-    pub(super) router: Result<&'r Router<C>>,
-    pub(super) table_name: String,
+	pub(super) router: Result<&'r Router<C>>,
+	pub(super) table_name: String,
 }
 
 impl<'r, Client> IntoFuture for Live<'r, Client>
 where
-    Client: Connection,
+	Client: Connection,
 {
-    type Output = Result<Uuid>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
+	type Output = Result<Uuid>;
+	type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + Sync + 'r>>;
 
-    fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move {
-            let mut conn = Client::new(Method::Live);
-            conn.execute(self.router?, Param::new(vec![self.table_name.into()]))
-                .await
-        })
-    }
+	fn into_future(self) -> Self::IntoFuture {
+		Box::pin(async move {
+			let mut conn = Client::new(Method::Live);
+			conn.execute(self.router?, Param::new(vec![self.table_name.into()])).await
+		})
+	}
 }
