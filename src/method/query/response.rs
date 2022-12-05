@@ -89,6 +89,37 @@ impl QueryResponse {
 			Some(query_result) => query_result.get(index_or_range),
 		}
 	}
+
+	/// Returns the deserialized `key` as a `<T>` from the inner [Value]s over the
+	/// given range or index for the query at `query_index`. If any row is missing
+	/// the field `key`, its default value will be returned in place.
+	///
+	/// - If no query is found at `query_index` then [`None`] is returned.
+	/// - if `index_or_range` is an index of type [usize] then a single `T`
+	/// is returned.
+	/// - if `index_or_range` is a range then a [`Vec<T>`] is returned if
+	/// and only if the full range is found inside the inner list.
+	///
+	/// In cases of out of bounds indices in either the query or the items then
+	/// `T::default()` is returned. This means that if `<T>` were to be an
+	/// Option it will return `None` and if it were to be a Vec then an empty
+	/// list will be returned.
+	pub fn get_key<'a, T, I>(
+		&'a self,
+		query_index: usize,
+		key: &str,
+		index_or_range: I,
+	) -> Result<T>
+	where
+		T: DeserializeOwned + Default,
+		I: SliceIndex<[Option<&'a Value>]>,
+		<I as SliceIndex<[Option<&'a Value>]>>::Output: Serialize,
+	{
+		match self.query_result(query_index) {
+			None => Ok(T::default()),
+			Some(query_result) => query_result.get_key(key, index_or_range),
+		}
+	}
 }
 
 impl From<Vec<QueryResult>> for QueryResponse {
@@ -219,6 +250,46 @@ impl QueryResult {
 		T: DeserializeOwned,
 	{
 		self.get(..)
+	}
+
+	/// Returns the deserialized `key` as a `<T>` from the inner [Value]s over the
+	/// given range or index. If any row is missing the field `key`, its default
+	/// value will be returned in place.
+	///
+	/// - If no query is found at `query_index` then [`None`] is returned.
+	/// - if `index_or_range` is an index of type [usize] then a single `T`
+	/// is returned.
+	/// - if `index_or_range` is a range then a [`Vec<T>`] is returned if
+	/// and only if the full range is found inside the inner list.
+	///
+	/// In cases of out of bounds indices the items then `T::default()` is
+	/// returned. This means that if `<T>` were to be an Option it will return
+	/// `None` and if it were to be a Vec then an empty list will be returned.
+	pub fn get_key<'a, T, I>(&'a self, key: &str, index_or_range: I) -> Result<T>
+	where
+		T: DeserializeOwned + Default,
+		I: SliceIndex<[Option<&'a Value>]>,
+		<I as SliceIndex<[Option<&'a Value>]>>::Output: Serialize,
+	{
+		let values: Vec<Option<&'a Value>> = self
+			.0
+			.as_ref()
+			.map_err(|error| error.clone())?
+			.iter()
+			.by_ref() // <-- allows us to collect a vec of references
+			.map(|value| match value {
+				Value::Object(object) => object.get(key),
+				_ => None,
+			})
+			.collect();
+
+		let some_slice = values.get::<I>(index_or_range);
+		let items = match some_slice {
+			Some(slice) => Some(from_serializable(slice)?),
+			None => None,
+		};
+
+		Ok(items.unwrap_or_default())
 	}
 
 	/// Unwrap into the inner result and possible list of raw unparsed values
