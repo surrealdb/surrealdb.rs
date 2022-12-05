@@ -620,3 +620,153 @@ async fn return_bool() {
 	let client = Surreal::connect::<Ws>(DB_ENDPOINT).await.unwrap();
 	client.query("RETURN true").await.unwrap();
 }
+
+#[tokio::test]
+async fn query_select_first_row() -> surrealdb_rs::Result<()> {
+	#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
+	struct User {
+		id: Option<String>,
+		name: String,
+		age: u8,
+	}
+
+	let client = sandboxed_client::<Ws>().await;
+
+	let created_user: User = client
+		.create("User")
+		.content(User {
+			age: 35,
+			name: "John Doe".to_owned(),
+			..Default::default()
+		})
+		.await
+		.unwrap();
+
+	let selected_user: User = client.query("select * from User").await.unwrap().get(0, 0).unwrap();
+
+	assert_eq!(created_user.id, selected_user.id, "it retrieves the first row of a query");
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn query_select_many_rows() -> surrealdb_rs::Result<()> {
+	use std::collections::HashSet;
+
+	#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
+	struct User {
+		id: Option<String>,
+		name: String,
+		age: u8,
+	}
+
+	let client = sandboxed_client::<Ws>().await;
+
+	let first: User = client
+		.create("User")
+		.content(User {
+			age: 35,
+			name: "John Doe".to_owned(),
+			..Default::default()
+		})
+		.await
+		.unwrap();
+
+	let second: User = client
+		.create("User")
+		.content(User {
+			age: 50,
+			name: "Jean Dupont".to_owned(),
+			..Default::default()
+		})
+		.await
+		.unwrap();
+
+	let selected_users: Vec<User> =
+		client.query("select * from User").await.unwrap().get(0, ..).unwrap();
+
+	assert!(selected_users.len() > 0, "it successfully retrieved multiple rows at once");
+
+	let selected_user_ids: HashSet<String> =
+		HashSet::from_iter(selected_users.iter().map(|u| u.id.clone().unwrap_or_default()));
+	let expected_user_ids: HashSet<String> =
+		HashSet::from([first.id.unwrap_or_default(), second.id.unwrap_or_default()]);
+
+	assert_eq!(expected_user_ids, selected_user_ids, "it retrieves multiple rows from a query");
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn query_select_key() -> surrealdb_rs::Result<()> {
+	#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
+	struct User {
+		id: Option<String>,
+		name: String,
+		age: u8,
+	}
+
+	let client = sandboxed_client::<Ws>().await;
+
+	let created_user: User = client
+		.create("User")
+		.content(User {
+			age: 35,
+			name: "John Doe".to_owned(),
+			..Default::default()
+		})
+		.await
+		.unwrap();
+
+	let selected_key: String =
+		client.query("select id from User").await.unwrap().get_key(0, "id", 0).unwrap();
+
+	assert_eq!(created_user.id, Some(selected_key), "it retrieves a row's key from a query");
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn query_select_keys() -> surrealdb_rs::Result<()> {
+	use std::collections::HashSet;
+
+	#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
+	struct User {
+		id: Option<String>,
+		name: String,
+		age: u8,
+	}
+
+	let client = sandboxed_client::<Ws>().await;
+
+	let first: User = client
+		.create("User")
+		.content(User {
+			age: 35,
+			name: "John Doe".to_owned(),
+			..Default::default()
+		})
+		.await
+		.unwrap();
+
+	let second: User = client
+		.create("User")
+		.content(User {
+			age: 50,
+			name: "Jean Dupont".to_owned(),
+			..Default::default()
+		})
+		.await
+		.unwrap();
+
+	let selected_keys: Vec<String> =
+		client.query("select id from User").await.unwrap().get_key(0, "id", ..).unwrap();
+
+	let selected_user_ids: HashSet<String> = HashSet::from_iter(selected_keys.into_iter());
+	let expected_user_ids: HashSet<String> =
+		HashSet::from([first.id.unwrap_or_default(), second.id.unwrap_or_default()]);
+
+	assert_eq!(expected_user_ids, selected_user_ids, "it retrieves multiple keys from a query");
+
+	Ok(())
+}
